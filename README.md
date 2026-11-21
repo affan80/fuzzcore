@@ -84,3 +84,8 @@ Separate opt-in `upload-v1` adds a fixed in-memory harmless-text create/read/del
 ### Saved immutable case versions
 
 Authenticated version library validates/saves/lists/retrieves one to three declarative cases per immutable version. Saving and loading never queue a scan. Loading copies into the editor and resets consent; later edits never alter past scans. Owner-scoped storage is capped at100 versions by database constraints; keyset pages hold50. Migration13 creates an empty library without inventing past saves. See [saved case evidence](docs/saved-case-evidence.md). No scan budget expansion.
+
+
+### Report filters and manual fixed review
+
+Shared validated filters apply to findings, JSON/HTML exports and new immutable snapshots, with matching totals and visible unfiltered counts. Fixed remains an explicit manual review label: a note plus completed owner-scoped exact-scope linked retest where the fingerprint was not observed. Partial, still-observed or unresolved-cleanup evidence is rejected. Original evidence remains intact; no automatic fix or source deployment. See [filter/review evidence](docs/report-filter-review-evidence.md).
