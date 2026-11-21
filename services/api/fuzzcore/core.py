@@ -1,5 +1,6 @@
 """Lab-only Day 1 core. No arbitrary targets, payloads or commands."""
 import os
+import json
 import time
 import uuid
 from datetime import datetime, timezone
@@ -26,6 +27,7 @@ class Scan(Base):
     target_id = Column(String, nullable=False, default='local-lab')
     scope_version = Column(String, nullable=False, default='lab-v1')
     authorization_confirmed_at = Column(String, nullable=True)
+    selected_modules = Column(String, nullable=False, default='directories')
     status = Column(String, nullable=False, default='queued')
     attempted = Column(Integer, nullable=False, default=0)
     planned = Column(Integer, nullable=False, default=len(PATHS))
@@ -49,6 +51,8 @@ class Finding(Base):
     path = Column(String, nullable=False)
     status_code = Column(Integer, nullable=False)
     summary = Column(Text, nullable=False)
+    module = Column(String, nullable=False, default='directories')
+    evidence = Column(Text, nullable=False, default='{}')
 
 
 class EnqueueIntent(Base):
@@ -75,7 +79,7 @@ def validate_lab_origin(origin):
     return 'http://lab:8081'
 
 
-def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic):
+def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None):
     """Cooperative, single-worker fixture discovery. probe accepts fixed paths only."""
     with sessions() as db:
         claimed = db.execute(update(Scan).where(
@@ -86,23 +90,43 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic):
             # Another delivery already owns this run, or it is terminal.
             return
     started = clock()
+    with sessions() as db:
+        modules = db.get(Scan, scan_id).selected_modules.split(',')
+    from .vhosts import CASES, discover
+    plan = ([('directories', path) for path in PATHS] if 'directories' in modules else [])
+    plan += ([('vhosts', case) for case in CASES] if 'vhosts' in modules else [])
+    vhost_results = {}
     try:
-        for path in PATHS:
+        if not plan or len(plan) > 7 or set(modules) - {'directories','vhosts'}:
+            raise ValueError('Unsupported run plan')
+        for module, path in plan:
             with sessions() as db:
                 row = db.get(Scan, scan_id)
                 if row.status == 'cancelling':
                     row.status = 'cancelled'; row.updated_at = utcnow(); db.commit(); return
                 if row.status != 'running':
                     return
+                if row.attempted >= row.planned or row.attempted >= 7:
+                    raise ValueError('Request budget exhausted')
                 if clock() - started > 300:
                     row.status = 'timed_out'; row.updated_at = utcnow(); db.commit(); return
-            status = probe(path)
+            result = vhost_probe(path) if module == 'vhosts' else None
+            status = result['status_code'] if result is not None else probe(path)
+            if module == 'vhosts':
+                vhost_results[path] = result
             with sessions() as db:
                 row = db.get(Scan, scan_id)
                 row.attempted += 1; row.updated_at = utcnow()
-                if 200 <= status < 300:
+                if module == 'directories' and 200 <= status < 300:
                     db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=path,
                                    status_code=status, summary='Lab resource discovered; not a vulnerability.'))
+                if module == 'vhosts' and path == 'seeded':
+                    found = discover(vhost_results)
+                    if found:
+                        db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=found['host'],
+                            status_code=found['status_code'], module='vhosts',
+                            evidence=json.dumps(found['evidence']),
+                            summary='Lab virtual host differs from default and random-host controls; discovery only.'))
                 if status == 429:
                     row.status = 'failed'; row.error = 'target_rate_limited'; db.commit(); return
                 db.commit()
@@ -139,4 +163,11 @@ def execute_job(scan_id):
             response = client.get('/probe', params={'path': path})
             response.raise_for_status()
             return response.json()['status_code']
-        run_scan(scan_id, sessions, probe)
+        def vhost_probe(case):
+            from .vhosts import CASES
+            if case not in CASES:
+                raise ValueError('Out-of-scope vhost case')
+            response = client.get('/vhost', params={'case':case})
+            response.raise_for_status()
+            return response.json()
+        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe)
