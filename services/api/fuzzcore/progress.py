@@ -5,8 +5,8 @@ BUDGETS={'directories':4,'vhosts':3,'api':6,'parameters':6,'subdomains':3}
 TERMINAL={'completed','cancelled','failed','timed_out','interrupted'}
 
 
-def initial_progress(modules,custom_cases):
-    return {module:{'state':'queued','planned':len(custom_cases) if module=='custom' else BUDGETS[module],
+def initial_progress(modules,custom_cases,directory_cases=()):
+    return {module:{'state':'queued','planned':len(custom_cases) if module=='custom' else BUDGETS[module]+(3*len(directory_cases) if module=='directories' else 0),
                     'attempted':0,'completed':0} for module in modules}
 
 
@@ -38,3 +38,7 @@ def fail_module(row,module):
     value=json.loads(row.module_progress)
     value[module]['state']='failed'
     row.module_progress=json.dumps(value)
+
+
+def planned_attempts(modules,custom_cases,directory_cases=()):
+    return sum(value['planned'] for value in initial_progress(modules,custom_cases,directory_cases).values())
