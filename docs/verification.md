@@ -2,6 +2,10 @@
 
 Updated 21 Nov 2026. A compiled APK, working web preview and physical Android acceptance are separate gates.
 
+## Final state, 22 Nov 2026
+
+Final dev is e64387a470e80227e2bd9798b305c522d36e71d8 (PR30 merge). Dependency gate closed: the 3 moderate advisories (GHSA-g3hv-75wg-m249, minimatch via expo > @expo/fingerprint, build tooling only) are cleared by an npm overrides pin of minimatch to ^11.0.1 (resolves 11.0.9), not by the incompatible Expo 52 downgrade npm suggested. A clean npm ci shows 0 vulnerabilities, with 19 mobile tests, TypeScript and web export passing. PR30 exact-head CI passed all four checks. Postmerge dev run https://github.com/affan80/fuzzcore/actions/runs/44952735148 passed, including real Docker and APK build. Final internal-test APK artifact: https://github.com/affan80/fuzzcore/actions/runs/44952735148/artifacts/14726183625 (GitHub archive digest sha256:a98d356fa864701757c5a4812dcd8730c626cf7cd292a6415303fee362c7e1a0). It is Android Debug signed, internal-test only and needs a running backend. It has not been installed on a physical device. Trusted HTTPS backend and native acceptance remain open. A clean audit is not a security certificate.
+
 ## Current summary
 
 All six bounded fixture modules are implemented. Defaults remain4directory/25maximum full-plan attempts. Canary, benign upload and curated API inventory are explicit immutable opt-ins. All options with3custom cases reserve38/use36ordinary attempts and retain2cleanup recovery reserves. Saved case versions, filtered JSON/HTML/snapshots and manual linked-retest fixed review are implemented. See [readiness](readiness.md) for honest release gates. Sections below record slice-time evidence; their older future-tense statements do not supersede this summary.
@@ -65,7 +69,7 @@ See `file-canary-evidence.md`. Eight new backend regressions failed before fixes
 - Physical Android verification of per-module progress after background/reconnect.
 - All possible egress routes, compromise resistance and production deployment hardening.
 - Recovery of every RQ failure mode. Current recovery handles unsent intents and explicit stale interrupted work; it is not a full distributed scheduler.
-- Final dependency advisory review, production signing and clean-machine submission rehearsal.
+- Production signing and clean-machine submission rehearsal. The dependency advisory gate closed on 22 Nov 2026, see Final state above.
 
 A discovered path or host is not a vulnerability. An empty result set is not a security certificate. No full-app or native-device completion is claimed.
 
