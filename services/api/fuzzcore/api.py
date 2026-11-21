@@ -1,4 +1,5 @@
 import os
+import json
 import secrets
 import uuid
 from typing import Literal
@@ -34,7 +35,7 @@ def create_app(sessions, enqueue, token):
         target_id: Literal['local-lab']
         profile_id: Literal['lab-small'] = 'lab-small'
         authorization_confirmed: Literal[True]
-        modules: list[Literal['directories']] = ['directories']
+        modules: list[Literal['directories','vhosts']] = ['directories']
 
         @field_validator('authorization_confirmed', mode='before')
         @classmethod
@@ -50,10 +51,10 @@ def create_app(sessions, enqueue, token):
     @app.get('/v1/capabilities')
     def capabilities(owner=Depends(auth)):
         return {
-            'modules': {name: {'supported': name == 'directories',
-                              'reason': None if name == 'directories' else 'not_implemented'}
+            'modules': {name: {'supported': name in ('directories','vhosts'),
+                              'reason': None if name in ('directories','vhosts') else 'not_implemented'}
                         for name in ('directories', 'vhosts', 'api', 'parameters', 'custom', 'subdomains')},
-            'profile': {'id': 'lab-small', 'max_attempts': 4,
+            'profile': {'id': 'lab-small', 'max_attempts': 7,
                         'requests_per_second': 2, 'concurrency': 1},
             'target_mode': 'fixed_lab_only', 'authorization_required': True,
         }
@@ -69,7 +70,7 @@ def create_app(sessions, enqueue, token):
         with sessions() as db:
             row = db.scalar(select(Scan).where(Scan.owner == owner, Scan.request_key == idempotency_key))
             if not row:
-                row = Scan(id=str(uuid.uuid4()), owner=owner, request_key=idempotency_key, authorization_confirmed_at=utcnow())
+                row = Scan(id=str(uuid.uuid4()), owner=owner, request_key=idempotency_key, authorization_confirmed_at=utcnow(), selected_modules=','.join(sorted(body.modules)), planned=(4 if 'directories' in body.modules else 0)+(3 if 'vhosts' in body.modules else 0))
                 db.add(row)
                 db.add(EnqueueIntent(scan_id=row.id))
                 try:
@@ -79,6 +80,8 @@ def create_app(sessions, enqueue, token):
                     row = db.scalar(select(Scan).where(Scan.owner == owner, Scan.request_key == idempotency_key))
                     if not row:
                         raise HTTPException(409, 'active_scan_exists')
+            if row.selected_modules.split(',') != sorted(body.modules):
+                raise HTTPException(409, 'idempotency_scope_mismatch')
             scan_id = row.id
         if not dispatch_one(sessions, enqueue, scan_id):
             raise HTTPException(503, 'queue_unavailable_retry_same_request')
@@ -111,14 +114,14 @@ def create_app(sessions, enqueue, token):
     def findings(scan_id: str, owner=Depends(auth)):
         with sessions() as db:
             owned(db, scan_id, owner)
-            return [{'id': r.id, 'path': r.path, 'status_code': r.status_code, 'summary': r.summary, 'severity': 'informational', 'confidence': 'observed'}
+            return [{'id': r.id, 'path': r.path, 'status_code': r.status_code, 'summary': r.summary, 'severity': 'informational', 'confidence': 'observed', 'module':r.module, 'evidence':json.loads(r.evidence)}
                     for r in db.scalars(select(Finding).where(Finding.scan_id == scan_id).limit(100))]
 
     return app
 
 
 def serialize(row):
-    return {key: getattr(row, key) for key in ('id', 'status', 'attempted', 'planned', 'created_at', 'updated_at', 'error', 'target_id', 'scope_version', 'authorization_confirmed_at')}
+    return {'modules':row.selected_modules.split(','), **{key: getattr(row, key) for key in ('id', 'status', 'attempted', 'planned', 'created_at', 'updated_at', 'error', 'target_id', 'scope_version', 'authorization_confirmed_at')}}
 
 
 def production_app():
