@@ -64,3 +64,5 @@ The scanner receives no DB, Redis or user-token credentials and accepts only fou
 Remaining design work includes the other discovery modules, rule-specific fixture evidence, report/retest UI, broader recovery/security regressions, trusted device connection and final demo. No green badge establishes complete isolation or production readiness.
 
 Stopping with `docker compose down -v` intentionally deletes demo history. It is a reset, not a safe recovery operation.
+
+Authenticated JSON/printable HTML reports, immutable report snapshots, review states and same-scope linked retests are implemented. Native export uses a user-controlled share sheet. Device behavior remains unverified. See `docs/report-retest-evidence.md` for boundaries and tests.
