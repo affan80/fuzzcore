@@ -53,6 +53,8 @@ class Finding(Base):
     summary = Column(Text, nullable=False)
     module = Column(String, nullable=False, default='directories')
     evidence = Column(Text, nullable=False, default='{}')
+    severity = Column(String, nullable=False, default='informational')
+    confidence = Column(String, nullable=False, default='observed')
 
 
 class EnqueueIntent(Base):
@@ -79,7 +81,7 @@ def validate_lab_origin(origin):
     return 'http://lab:8081'
 
 
-def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None):
+def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None):
     """Cooperative, single-worker fixture discovery. probe accepts fixed paths only."""
     with sessions() as db:
         claimed = db.execute(update(Scan).where(
@@ -95,9 +97,12 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
     from .vhosts import CASES, discover
     plan = ([('directories', path) for path in PATHS] if 'directories' in modules else [])
     plan += ([('vhosts', case) for case in CASES] if 'vhosts' in modules else [])
+    from .api_checks import CASES as API_CASES, assess
+    plan += ([('api', case) for case in API_CASES] if 'api' in modules else [])
     vhost_results = {}
+    api_results = {}
     try:
-        if not plan or len(plan) > 7 or set(modules) - {'directories','vhosts'}:
+        if not plan or len(plan) > 13 or set(modules) - {'directories','vhosts','api'}:
             raise ValueError('Unsupported run plan')
         for module, path in plan:
             with sessions() as db:
@@ -106,17 +111,20 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                     row.status = 'cancelled'; row.updated_at = utcnow(); db.commit(); return
                 if row.status != 'running':
                     return
-                if row.attempted >= row.planned or row.attempted >= 7:
+                if row.attempted >= row.planned or row.attempted >= 13:
                     raise ValueError('Request budget exhausted')
                 if clock() - started > 300:
                     row.status = 'timed_out'; row.updated_at = utcnow(); db.commit(); return
-            result = vhost_probe(path) if module == 'vhosts' else None
+                row.attempted += 1; row.updated_at = utcnow(); db.commit()
+            result = vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else None
             status = result['status_code'] if result is not None else probe(path)
             if module == 'vhosts':
                 vhost_results[path] = result
+            elif module == 'api':
+                api_results[path] = result
             with sessions() as db:
                 row = db.get(Scan, scan_id)
-                row.attempted += 1; row.updated_at = utcnow()
+                row.updated_at = utcnow()
                 if module == 'directories' and 200 <= status < 300:
                     db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=path,
                                    status_code=status, summary='Lab resource discovered; not a vulnerability.'))
@@ -127,6 +135,12 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                             status_code=found['status_code'], module='vhosts',
                             evidence=json.dumps(found['evidence']),
                             summary='Lab virtual host differs from default and random-host controls; discovery only.'))
+                if module == 'api' and path == 'alice-cross':
+                    found = assess(api_results)
+                    if found:
+                        db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=found['path'],
+                            status_code=200, module='api', severity=found['severity'], confidence=found['confidence'],
+                            evidence=json.dumps(found['evidence']), summary=found['summary']))
                 if status == 429:
                     row.status = 'failed'; row.error = 'target_rate_limited'; db.commit(); return
                 db.commit()
@@ -170,4 +184,11 @@ def execute_job(scan_id):
             response = client.get('/vhost', params={'case':case})
             response.raise_for_status()
             return response.json()
-        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe)
+        def api_probe(case):
+            from .api_checks import CASES
+            if case not in CASES:
+                raise ValueError('Out-of-scope API case')
+            response = client.get('/api-check', params={'case':case})
+            response.raise_for_status()
+            return response.json()
+        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe)
