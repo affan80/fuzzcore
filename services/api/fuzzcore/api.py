@@ -69,6 +69,7 @@ def create_app(sessions, enqueue, token):
                         for name in ('directories', 'vhosts', 'api', 'parameters', 'custom', 'subdomains')},
             'profile': {'id': 'lab-small', 'max_attempts': 25,
                         'requests_per_second': 2, 'concurrency': 1},
+            'custom_case_schema':{'version':'declarative-v2','methods':['GET','POST'],'post_paths':['/custom-disposable'],'response_header_names':['content-type','x-fixture-mode'],'max_body_marker_length':64,'max_cases':3},
             'target_mode': 'fixed_lab_only', 'authorization_required': True,
         }
 
