@@ -32,6 +32,8 @@ else:
     raise RuntimeError('Fixture did not finish')
 findings = request('/v1/scans/' + scan['id'] + '/findings')
 assert len(findings) == 3 and detail['attempted'] == 4
+assert all(f['evidence']['rule_id']=='directory-control-v1' for f in findings)
+assert all(f['evidence']['baseline']['status_code']==404 for f in findings)
 # The same key cannot change its authorized module snapshot.
 from urllib.error import HTTPError
 try:
