@@ -5,12 +5,13 @@ import uuid
 from typing import Literal
 
 from fastapi import FastAPI, Depends, Header, HTTPException
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from .core import Scan, Finding, EnqueueIntent, database, utcnow
 from .outbox import dispatch_one
+from .custom_cases import CustomCase, canonical, version
 
 
 def create_app(sessions, enqueue, token):
@@ -35,7 +36,15 @@ def create_app(sessions, enqueue, token):
         target_id: Literal['local-lab']
         profile_id: Literal['lab-small'] = 'lab-small'
         authorization_confirmed: Literal[True]
-        modules: list[Literal['directories','vhosts','api','parameters']] = ['directories']
+        modules: list[Literal['directories','vhosts','api','parameters','custom']] = ['directories']
+
+        custom_cases:list[CustomCase]=Field(default_factory=list,max_length=3)
+
+        @model_validator(mode='after')
+        def custom_scope(self):
+            if ('custom' in self.modules and not 1<=len(self.custom_cases)<=3) or ('custom' not in self.modules and self.custom_cases):
+                raise ValueError('Custom module requires one to three cases, and only that module may carry them')
+            return self
 
         @field_validator('authorization_confirmed', mode='before')
         @classmethod
@@ -51,10 +60,10 @@ def create_app(sessions, enqueue, token):
     @app.get('/v1/capabilities')
     def capabilities(owner=Depends(auth)):
         return {
-            'modules': {name: {'supported': name in ('directories','vhosts','api','parameters'),
-                              'reason': None if name in ('directories','vhosts','api','parameters') else 'not_implemented'}
+            'modules': {name: {'supported': name in ('directories','vhosts','api','parameters','custom'),
+                              'reason': None if name in ('directories','vhosts','api','parameters','custom') else 'not_implemented'}
                         for name in ('directories', 'vhosts', 'api', 'parameters', 'custom', 'subdomains')},
-            'profile': {'id': 'lab-small', 'max_attempts': 19,
+            'profile': {'id': 'lab-small', 'max_attempts': 22,
                         'requests_per_second': 2, 'concurrency': 1},
             'target_mode': 'fixed_lab_only', 'authorization_required': True,
         }
@@ -70,7 +79,7 @@ def create_app(sessions, enqueue, token):
         with sessions() as db:
             row = db.scalar(select(Scan).where(Scan.owner == owner, Scan.request_key == idempotency_key))
             if not row:
-                row = Scan(id=str(uuid.uuid4()), owner=owner, request_key=idempotency_key, authorization_confirmed_at=utcnow(), selected_modules=','.join(sorted(body.modules)), planned=(4 if 'directories' in body.modules else 0)+(3 if 'vhosts' in body.modules else 0)+(6 if 'api' in body.modules else 0)+(6 if 'parameters' in body.modules else 0))
+                row = Scan(id=str(uuid.uuid4()), owner=owner, request_key=idempotency_key, authorization_confirmed_at=utcnow(), selected_modules=','.join(sorted(body.modules)), custom_cases=canonical([c.model_dump() for c in body.custom_cases]), case_version=version([c.model_dump() for c in body.custom_cases]) if body.custom_cases else None, planned=(4 if 'directories' in body.modules else 0)+(3 if 'vhosts' in body.modules else 0)+(6 if 'api' in body.modules else 0)+(6 if 'parameters' in body.modules else 0)+len(body.custom_cases))
                 db.add(row)
                 db.add(EnqueueIntent(scan_id=row.id))
                 try:
@@ -80,7 +89,7 @@ def create_app(sessions, enqueue, token):
                     row = db.scalar(select(Scan).where(Scan.owner == owner, Scan.request_key == idempotency_key))
                     if not row:
                         raise HTTPException(409, 'active_scan_exists')
-            if row.selected_modules.split(',') != sorted(body.modules):
+            if row.selected_modules.split(',') != sorted(body.modules) or row.custom_cases != canonical([c.model_dump() for c in body.custom_cases]):
                 raise HTTPException(409, 'idempotency_scope_mismatch')
             scan_id = row.id
         if not dispatch_one(sessions, enqueue, scan_id):
@@ -121,7 +130,7 @@ def create_app(sessions, enqueue, token):
 
 
 def serialize(row):
-    return {'modules':row.selected_modules.split(','), **{key: getattr(row, key) for key in ('id', 'status', 'attempted', 'planned', 'created_at', 'updated_at', 'error', 'target_id', 'scope_version', 'authorization_confirmed_at')}}
+    return {'modules':row.selected_modules.split(','),'custom_cases':json.loads(row.custom_cases),'case_version':row.case_version, **{key: getattr(row, key) for key in ('id', 'status', 'attempted', 'planned', 'created_at', 'updated_at', 'error', 'target_id', 'scope_version', 'authorization_confirmed_at')}}
 
 
 def production_app():

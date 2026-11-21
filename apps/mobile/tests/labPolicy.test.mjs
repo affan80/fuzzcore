@@ -28,5 +28,12 @@ test('API fixture module is a bounded supported choice', () => {
 
 test('parameter signals stay inside the fixed fixture module list', () => {
   assert.deepEqual(buildLabRequest(true,['parameters']).modules,['parameters']);
-  assert.throws(()=>buildLabRequest(true,['custom']),/module/);
+  assert.throws(()=>buildLabRequest(true,['subdomains']),/module/);
+});
+
+test('custom case selection needs bounded declarative cases', () => {
+  const cases=[{path:'/health',method:'GET',params:{},expect_status:200,contains:'fixture'}];
+  assert.deepEqual(buildLabRequest(true,['custom'],cases).custom_cases,cases);
+  assert.throws(()=>buildLabRequest(true,['custom'],[]),/case/);
+  assert.throws(()=>buildLabRequest(true,['custom'],[...cases,...cases,...cases,...cases]),/case/);
 });
