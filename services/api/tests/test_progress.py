@@ -92,7 +92,7 @@ def test_v9_upgrade_does_not_invent_module_results(tmp_path):
     sessions=database('sqlite:///'+str(tmp_path/'progress.db'))
     with sessions() as db:
         assert db.get(Scan,id).module_progress=='{}'
-        assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==12
+        assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==13
 
 
 def test_final_response_rate_limit_is_failed_not_completed_module(tmp_path):
