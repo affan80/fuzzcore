@@ -16,7 +16,7 @@ test('confirmed requests contain only the fixed approved lab and supported modul
 test('confirmed module choices are explicit, unique and limited to fixture implementations', () => {
   assert.deepEqual(buildLabRequest(true, ['vhosts']).modules, ['vhosts']);
   assert.deepEqual(buildLabRequest(true, ['directories','vhosts']).modules, ['directories','vhosts']);
-  for (const modules of [[],['subdomains'],['vhosts','vhosts']]) {
+  for (const modules of [[],['unknown'],['vhosts','vhosts']]) {
     assert.throws(() => buildLabRequest(true, modules), /module/);
   }
 });
@@ -28,7 +28,7 @@ test('API fixture module is a bounded supported choice', () => {
 
 test('parameter signals stay inside the fixed fixture module list', () => {
   assert.deepEqual(buildLabRequest(true,['parameters']).modules,['parameters']);
-  assert.throws(()=>buildLabRequest(true,['subdomains']),/module/);
+  assert.throws(()=>buildLabRequest(true,['unknown']),/module/);
 });
 
 test('custom case selection needs bounded declarative cases', () => {
@@ -36,4 +36,9 @@ test('custom case selection needs bounded declarative cases', () => {
   assert.deepEqual(buildLabRequest(true,['custom'],cases).custom_cases,cases);
   assert.throws(()=>buildLabRequest(true,['custom'],[]),/case/);
   assert.throws(()=>buildLabRequest(true,['custom'],[...cases,...cases,...cases,...cases]),/case/);
+});
+
+test('DNS fixture discovery is explicit and does not supply HTTP targets', () => {
+  assert.deepEqual(buildLabRequest(true,['subdomains']).modules,['subdomains']);
+  assert.equal(buildLabRequest(true,['subdomains']).target_id,'local-lab');
 });

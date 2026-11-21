@@ -83,7 +83,7 @@ def validate_lab_origin(origin):
     return 'http://lab:8081'
 
 
-def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None):
+def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None, dns_probe=None):
     """Cooperative, single-worker fixture discovery. probe accepts fixed paths only."""
     with sessions() as db:
         claimed = db.execute(update(Scan).where(
@@ -109,9 +109,12 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
     plan += ([('parameters', case) for case in PARAM_CASES] if 'parameters' in modules else [])
     api_results = {}
     plan += ([('custom',case) for case in custom_cases] if 'custom' in modules else [])
+    from .subdomains import CASES as DNS_CASES,discover as discover_dns
+    plan += ([('subdomains',case) for case in DNS_CASES] if 'subdomains' in modules else [])
+    dns_results = {}
     parameter_results = {}
     try:
-        if not plan or len(plan) > 22 or set(modules) - {'directories','vhosts','api','parameters','custom'}:
+        if not plan or len(plan) > 25 or set(modules) - {'directories','vhosts','api','parameters','custom','subdomains'}:
             raise ValueError('Unsupported run plan')
         for module, path in plan:
             with sessions() as db:
@@ -120,19 +123,21 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                     row.status = 'cancelled'; row.updated_at = utcnow(); db.commit(); return
                 if row.status != 'running':
                     return
-                if row.attempted >= row.planned or row.attempted >= 22:
+                if row.attempted >= row.planned or row.attempted >= 25:
                     raise ValueError('Request budget exhausted')
                 if clock() - started > 300:
                     row.status = 'timed_out'; row.updated_at = utcnow(); db.commit(); return
                 row.attempted += 1; row.updated_at = utcnow(); db.commit()
-            result = vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else custom_probe(path) if module == 'custom' else None
-            status = result['status_code'] if result is not None else probe(path)
+            result = vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else custom_probe(path) if module == 'custom' else dns_probe(path) if module == 'subdomains' else None
+            status = (200 if result['rcode'] in (0,3) else 502) if module=='subdomains' else result['status_code'] if result is not None else probe(path)
             if module == 'vhosts':
                 vhost_results[path] = result
             elif module == 'api':
                 api_results[path] = result
             elif module == 'parameters':
                 parameter_results[path] = result
+            elif module=='subdomains':
+                dns_results[path] = result
             with sessions() as db:
                 row = db.get(Scan, scan_id)
                 row.updated_at = utcnow()
@@ -163,6 +168,13 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                         confidence='observed' if result['passed'] else 'signal',
                         summary='Declarative fixture expectation '+('passed.' if result['passed'] else 'did not match; review required, not a vulnerability proof.'),
                         evidence=json.dumps({'rule_id':'custom-expectation-v1','case_version':case_version,**result})))
+                if module=='subdomains' and path=='seeded':
+                    found=discover_dns(dns_results)
+                    if found:
+                        db.add(Finding(id=str(uuid.uuid4()),scan_id=scan_id,path=found['path'],
+                            status_code=200,module='subdomains',severity='informational',confidence='observed',
+                            summary='Local fixture DNS record discovered; no HTTP follow-up or vulnerability claim.',
+                            evidence=json.dumps(found['evidence'])))
                 if status == 429:
                     row.status = 'failed'; row.error = 'target_rate_limited'; db.commit(); return
                 db.commit()
@@ -225,4 +237,10 @@ def execute_job(scan_id):
             response=client.post('/custom-check',json=case)
             response.raise_for_status()
             return response.json()
-        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe)
+        def dns_probe(case):
+            from .subdomains import CASES
+            if case not in CASES:raise ValueError('Out-of-scope DNS case')
+            response=client.get('/dns-check',params={'case':case})
+            response.raise_for_status()
+            return response.json()
+        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe, dns_probe=dns_probe)

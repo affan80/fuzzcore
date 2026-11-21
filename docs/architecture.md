@@ -18,7 +18,7 @@ API owns validation, identity, ownership, scope and budgets. Postgres is the sou
 - Worker supervisor: internal data/control networks, DB/Redis credentials.
 - Scanner gateway: internal control/lab networks only, no DB/Redis/user-token credentials. Four fixed paths plus allowlisted default/control/seeded vhost cases, no redirects. Vhost bodies are hashed within a 16 KiB processing limit and discarded.
 - DB/Redis: data only, no published ports.
-- Web fixture: lab only. A DNS fixture is planned for the subdomain module.
+- Web fixture: lab only. A non-recursive UDP DNS fixture is attached only to the lab network, with no published port. Three fixed suffix/control/candidate queries never use public resolvers or trigger HTTP follow-up.
 
 All application containers run non-root with dropped capabilities. No Docker socket, host mounts or target-provided commands. The trusted worker bridges data and control, an explicit residual trust boundary. Passing network membership and local data-service rejection tests does not prove every possible egress route or sandbox escape is blocked.
 
@@ -33,7 +33,7 @@ All application containers run non-root with dropped capabilities. No Docker soc
 - POST /v1/scans/{id}/cancel
 - GET /v1/scans/{id}/findings
 
-All except liveness require bearer authentication. Scan creation accepts only `local-lab`, `lab-small`, directory/vhost/API/parameter/custom module selection and explicit boolean confirmation. Unknown fields and modules fail validation. API response identifiers are `id`, consistently used by the app.
+All except liveness require bearer authentication. Scan creation accepts only `local-lab`, `lab-small`, directory/vhost/API/parameter/custom/DNS module selection and explicit boolean confirmation. Unknown fields and modules fail validation. API response identifiers are `id`, consistently used by the app.
 
 ## Persistence and lifecycle
 
