@@ -42,3 +42,13 @@ test('DNS fixture discovery is explicit and does not supply HTTP targets', () =>
   assert.deepEqual(buildLabRequest(true,['subdomains']).modules,['subdomains']);
   assert.equal(buildLabRequest(true,['subdomains']).target_id,'local-lab');
 });
+
+test('named disposable POST example keeps its bounded body and header expectations',async()=>{
+ const {DISPOSABLE_POST_EXAMPLE}=await import('../labPolicy.ts');
+ assert.equal(DISPOSABLE_POST_EXAMPLE.method,'POST');
+ assert.equal(DISPOSABLE_POST_EXAMPLE.path,'/custom-disposable');
+ assert.deepEqual(Object.keys(DISPOSABLE_POST_EXAMPLE.body),['marker']);
+ assert.deepEqual(Object.keys(DISPOSABLE_POST_EXAMPLE.expect_headers),['content-type','x-fixture-mode']);
+ assert.deepEqual(buildLabRequest(true,['custom'],[DISPOSABLE_POST_EXAMPLE]).custom_cases,[DISPOSABLE_POST_EXAMPLE]);
+ assert.throws(()=>buildLabRequest(false,['custom'],[DISPOSABLE_POST_EXAMPLE]),/Confirm/);
+});
