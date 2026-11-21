@@ -8,7 +8,7 @@ def upgrade(engine, metadata, active_index):
     with engine.begin() as connection:
         connection.execute(text('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)'))
         version = connection.execute(text('SELECT COALESCE(MAX(version), 0) FROM schema_migrations')).scalar_one()
-        if version > 3:
+        if version > 4:
             raise RuntimeError('Database schema is newer than this application')
         if version < 1:
             metadata.create_all(connection)
@@ -31,3 +31,15 @@ def upgrade(engine, metadata, active_index):
                 if name not in columns:
                     connection.execute(text(f'ALTER TABLE scans ADD COLUMN {name} {definition}'))
             connection.execute(text('INSERT INTO schema_migrations (version) VALUES (3)'))
+
+        if version < 4:
+            # Old records have no per-scan authorization evidence. Preserve
+            # history but never turn unknown consent into executable work.
+            connection.execute(text("UPDATE scans SET status='interrupted', "
+                "error='authorization_confirmation_required' "
+                "WHERE status='queued' AND authorization_confirmed_at IS NULL"))
+            connection.execute(text("INSERT INTO enqueue_intents (scan_id, attempts, sent_at) "
+                "SELECT s.id, 0, NULL FROM scans s "
+                "WHERE s.status='queued' AND s.authorization_confirmed_at IS NOT NULL "
+                "AND NOT EXISTS (SELECT 1 FROM enqueue_intents e WHERE e.scan_id=s.id)"))
+            connection.execute(text('INSERT INTO schema_migrations (version) VALUES (4)'))

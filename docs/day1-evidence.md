@@ -12,13 +12,13 @@ One user, a fixed isolated lab, four resource checks, and an Android React Nativ
 - One active run: database partial unique index covers queued/running/cancelling per owner. Tests include two application instances sharing a DB.
 - Job claim: a forced two-worker race produced eight requests for a four-path run. Replaced read-then-write with an atomic conditional update; test now records exactly four.
 - Enqueue recovery: failing tests showed queue outages made runs unrecoverable. Scan and enqueue intent now commit together; retry with the same idempotency key can dispatch the same scan. Stable RQ job IDs and an atomic worker claim prevent duplicate traffic. This is at-least-once dispatch, not a claim of exactly-once messaging.
-- Schema: versioned forward migration ledger adopts the original tables, adds the active-run index/outbox, and stores scope confirmation. A legacy-database test preserves old history and unknown authorization. Conflicting legacy active runs cause a visible migration failure, not silent deletion.
+- Schema: versioned forward migration ledger adopts the original tables, adds the active-run index/outbox, and stores scope confirmation. A legacy-database test preserves old history and unknown authorization. Conflicting legacy active runs cause a visible migration failure, not silent deletion. Migration v4 marks unconfirmed legacy queued scans interrupted without inventing consent. It backfills missing enqueue intents only for already-confirmed queued scans. Two additional test-first regressions cover this upgrade boundary and idempotent recovery.
 - Interrupted work: an explicit operator recovery command requires the worker to be stopped, marks stale runs interrupted, and retries unsent queue intents. It does not automatically replay interrupted scans.
 - Mobile: policy tests failed before the request builder existed. Start is disabled until authorization is confirmed; a successful submit resets confirmation. Web UI integration ran against a real loopback fixture, completed four checks/three discoveries and showed history. This test adapter is SQLite/threads, not Docker/RQ or native Android.
 
 ## Local results
 
-30 Python tests; 2 Node mobile-policy tests; TypeScript check and web export pass. Visual web views inspected at 320, 390 and 1280 pixels. No page errors in the observed UI test. These results do not prove Android install, SecureStore behavior or phone-to-backend HTTPS.
+32 Python tests; 2 Node mobile-policy tests; TypeScript check and web export pass. Visual web views inspected at 320, 390 and 1280 pixels. No page errors in the observed UI test. These results do not prove Android install, SecureStore behavior or phone-to-backend HTTPS.
 
 ## Recovery procedure
 
