@@ -6,7 +6,7 @@ TERMINAL={'completed','cancelled','failed','timed_out','interrupted'}
 
 
 def initial_progress(modules,custom_cases,directory_cases=()):
-    return {module:{'state':'queued','planned':len(custom_cases) if module=='custom' else BUDGETS[module]+(3*len(directory_cases) if module=='directories' else 0),
+    return {module:{'state':'queued','planned':len(custom_cases) if module=='custom' else BUDGETS[module]+(sum({'canary-v1':3,'upload-v1':6}[case] for case in directory_cases) if module=='directories' else 0),
                     'attempted':0,'completed':0} for module in modules}
 
 

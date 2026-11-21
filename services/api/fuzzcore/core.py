@@ -31,6 +31,8 @@ class Scan(Base):
     authorization_confirmed_at = Column(String, nullable=True)
     custom_cases = Column(Text, nullable=False, default='[]')
     directory_cases = Column(Text,nullable=False,default='[]')
+    cleanup_status=Column(String,nullable=False,default='not_required')
+    cleanup_attempted=Column(Integer,nullable=False,default=0)
     case_version = Column(String, nullable=True)
     retest_of = Column(String,nullable=True)
     selected_modules = Column(String, nullable=False, default='directories')
@@ -99,7 +101,7 @@ def validate_lab_origin(origin):
     return 'http://lab:8081'
 
 
-def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None, dns_probe=None, directory_probe=None, file_probe=None):
+def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None, dns_probe=None, directory_probe=None, file_probe=None, upload_probe=None):
     """Cooperative, single-worker fixture discovery. probe accepts fixed paths only."""
     with sessions() as db:
         claimed = db.execute(update(Scan).where(
@@ -127,6 +129,8 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
     file_results={}
     if 'directories' in modules and 'canary-v1' in directory_cases:
         plan += [('directories','canary:'+case) for case in FILE_CASES]
+    if 'directories' in modules and 'upload-v1' in directory_cases:
+        plan += [('directories','upload:roundtrip')]
     plan += ([('vhosts', case) for case in CASES] if 'vhosts' in modules else [])
     from .api_checks import CASES as API_CASES, assess
     plan += ([('api', case) for case in API_CASES] if 'api' in modules else [])
@@ -141,16 +145,24 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
     dns_results = {}
     parameter_results = {}
     try:
-        if not plan or len(plan) > 28 or set(directory_cases)-{'canary-v1'} or len(directory_cases)!=len(set(directory_cases)) or (directory_cases and 'directories' not in modules) or set(modules) - {'directories','vhosts','api','parameters','custom','subdomains'}:
+        if not plan or len(plan)+5*('upload-v1' in directory_cases) > 34 or set(directory_cases)-{'canary-v1','upload-v1'} or len(directory_cases)!=len(set(directory_cases)) or (directory_cases and 'directories' not in modules) or set(modules) - {'directories','vhosts','api','parameters','custom','subdomains'}:
             raise ValueError('Unsupported run plan')
         for module, path in plan:
+            if path=='upload:roundtrip':
+                from .uploads import run_upload
+                run_upload(sessions,scan_id,upload_probe,clock=clock,started=started,pause=pause)
+                with sessions() as db:
+                    row=db.get(Scan,scan_id)
+                    if row.status=='cancelling':row.status='cancelled'
+                    if row.status!='running':settle_progress(row);db.commit();return
+                continue
             with sessions() as db:
                 row = db.get(Scan, scan_id)
                 if row.status == 'cancelling':
                     row.status = 'cancelled'; row.updated_at = utcnow(); settle_progress(row); db.commit(); return
                 if row.status != 'running':
                     return
-                if row.attempted >= row.planned or row.attempted >= 28:
+                if row.attempted >= row.planned or row.attempted >= 34:
                     raise ValueError('Request budget exhausted')
                 if clock() - started > 300:
                     row.status = 'timed_out'; row.updated_at = utcnow(); settle_progress(row); db.commit(); return
@@ -225,8 +237,8 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
     except Exception:
         with sessions() as db:
             row = db.get(Scan, scan_id)
-            row.status = 'cancelled' if row.status == 'cancelling' else 'failed'
-            row.error = None if row.status == 'cancelled' else 'probe_failed'
+            row.status = 'timed_out' if row.status=='timed_out' else 'cancelled' if row.status == 'cancelling' else 'failed'
+            row.error = row.error or (None if row.status == 'cancelled' else 'probe_failed')
             if row.status=='failed' and 'module' in locals():fail_module(row,module)
             row.updated_at = utcnow(); settle_progress(row); db.commit()
 
@@ -292,4 +304,5 @@ def execute_job(scan_id):
             response=client.get('/dns-check',params={'case':case})
             response.raise_for_status()
             return response.json()
-        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe, dns_probe=dns_probe, directory_probe=directory_probe,file_probe=file_probe)
+        from .uploads import scanner_upload_probe
+        run_scan(scan_id, sessions, probe,upload_probe=scanner_upload_probe(client,scan_id), vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe, dns_probe=dns_probe, directory_probe=directory_probe,file_probe=file_probe)

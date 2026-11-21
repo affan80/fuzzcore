@@ -35,10 +35,10 @@ def test_canary_selection_is_opt_in_immutable_and_budgeted(tmp_path):
     assert row['directory_cases']==['canary-v1'] and row['planned']==7
     assert row['module_progress']['directories']['planned']==7
     caps=c.get('/v1/capabilities').json()
-    assert caps['directory_cases']['canary-v1']['requests']==3 and caps['profile']['max_attempts']==28
+    assert caps['directory_cases']['canary-v1']['requests']==3 and caps['profile']['max_attempts']==34
 
 
-@pytest.mark.parametrize('extra',[{'directory_cases':['upload-v1']},{'directory_cases':['canary-v1','canary-v1']},{'modules':['vhosts'],'directory_cases':['canary-v1']},{'directory_cases':['../outside']}])
+@pytest.mark.parametrize('extra',[{'directory_cases':['unknown-v1']},{'directory_cases':['canary-v1','canary-v1']},{'modules':['vhosts'],'directory_cases':['canary-v1']},{'directory_cases':['../outside']}])
 def test_unknown_duplicate_or_unselected_directory_cases_rejected(tmp_path,extra):
     s,c=client(tmp_path)
     assert submit(c,**extra).status_code==422

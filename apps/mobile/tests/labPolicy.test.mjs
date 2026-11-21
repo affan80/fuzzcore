@@ -58,6 +58,15 @@ test('synthetic canary is explicit and adds only its named case selection',()=>{
  assert.deepEqual(row.directory_cases,['canary-v1']);
  assert.equal(buildLabRequest(true,['directories']).directory_cases,undefined);
  for(const modules of [['vhosts'],['custom']])assert.throws(()=>buildLabRequest(true,modules,[],['canary-v1']),/case|directories/);
- assert.throws(()=>buildLabRequest(true,['directories'],[],['upload-v1']),/case/);
+ assert.throws(()=>buildLabRequest(true,['directories'],[],['unknown-v1']),/case/);
  assert.throws(()=>buildLabRequest(false,['directories'],[],['canary-v1']),/Confirm/);
+});
+
+
+test('benign upload is explicit, immutable and separate from the read-only canary',()=>{
+ assert.deepEqual(buildLabRequest(true,['directories'],[],['upload-v1']).directory_cases,['upload-v1']);
+ assert.deepEqual(buildLabRequest(true,['directories'],[],['upload-v1','canary-v1']).directory_cases,['canary-v1','upload-v1']);
+ assert.throws(()=>buildLabRequest(false,['directories'],[],['upload-v1']),/Confirm/);
+ assert.throws(()=>buildLabRequest(true,['api'],[],['upload-v1']),/case/);
+ assert.throws(()=>buildLabRequest(true,['directories'],[],['upload-v1','upload-v1']),/case/);
 });

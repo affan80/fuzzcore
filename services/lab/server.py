@@ -2,6 +2,8 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import re
+import threading
+import time
 from urllib.parse import urlsplit, parse_qs
 
 class Handler(BaseHTTPRequestHandler):
@@ -12,7 +14,48 @@ class Handler(BaseHTTPRequestHandler):
     directory_soft404 = False
     allow_seeded_canary = True
 
+    uploads={}
+    upload_lock=threading.Lock()
+    upload_ttl_seconds=300
+
+    def upload_id(self):
+        match=re.fullmatch(r'/upload-fixture/([a-f0-9]{32})',self.path)
+        return match[1] if match else None
+
+    @classmethod
+    def expire_upload(cls,object_id,expires_at):
+        with cls.upload_lock:
+            if cls.uploads.get(object_id,{}).get('expires_at')==expires_at:cls.uploads.pop(object_id,None)
+
+    def upload_reply(self,status,body=b''):
+        self.send_response(status);self.send_header('Content-Type','application/octet-stream')
+        self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+
+    def do_DELETE(self):
+        object_id=self.upload_id()
+        if object_id is None:self.send_error(404);return
+        if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Length','0')!='0':self.send_error(400);return
+        with self.upload_lock:
+            value=self.uploads.pop(object_id,None)
+            if value:value['timer'].cancel()
+        self.upload_reply(204)
+
     def do_POST(self):
+        if self.path.startswith('/upload-fixture/'):
+            object_id=self.upload_id();marker=b'FUZZCORE_BENIGN_UPLOAD_FIXTURE_v1'
+            try:
+                length=int(self.headers.get('Content-Length','0'))
+                if object_id is None or length!=len(marker) or self.headers.get('Content-Type')!='application/octet-stream' or self.headers.get('Transfer-Encoding'):raise ValueError()
+                if self.rfile.read(length)!=marker:raise ValueError()
+            except ValueError:self.send_error(400);return
+            with self.upload_lock:
+                if object_id in self.uploads:self.send_error(409);return
+                if len(self.uploads)>=64:self.send_error(503);return
+                expires_at=time.monotonic()+self.upload_ttl_seconds
+                timer=threading.Timer(self.upload_ttl_seconds,type(self).expire_upload,args=(object_id,expires_at));timer.daemon=True
+                self.uploads[object_id]={'timer':timer,'expires_at':expires_at};timer.start()
+            self.upload_reply(201,b'created');return
+
         # Named stateless disposable scenario: no files, DB changes or retained data.
         if self.path!='/custom-disposable':
             self.send_error(404);return
@@ -32,6 +75,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed=urlsplit(self.path)
+        if parsed.path.startswith('/upload-fixture/'):
+            object_id=self.upload_id()
+            if object_id is None:self.send_error(404);return
+            with self.upload_lock:
+                value=self.uploads.get(object_id)
+                exists=value is not None and value['expires_at']>time.monotonic()
+            self.upload_reply(200 if exists else 404,b'FUZZCORE_BENIGN_UPLOAD_FIXTURE_v1' if exists else b'absent');return
+
         if parsed.path=='/file-fixture':
             # Symbolic dictionary response only. Never opens, resolves or includes a file.
             values=parse_qs(parsed.query,max_num_fields=1).get('name',[])
