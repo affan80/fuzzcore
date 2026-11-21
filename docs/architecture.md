@@ -33,7 +33,7 @@ All application containers run non-root with dropped capabilities. No Docker soc
 - POST /v1/scans/{id}/cancel
 - GET /v1/scans/{id}/findings
 
-All except liveness require bearer authentication. Scan creation accepts only `local-lab`, `lab-small`, directory/vhost/API/parameter module selection and explicit boolean confirmation. Unknown fields and modules fail validation. API response identifiers are `id`, consistently used by the app.
+All except liveness require bearer authentication. Scan creation accepts only `local-lab`, `lab-small`, directory/vhost/API/parameter/custom module selection and explicit boolean confirmation. Unknown fields and modules fail validation. API response identifiers are `id`, consistently used by the app.
 
 ## Persistence and lifecycle
 
@@ -47,7 +47,7 @@ Schema migration ledger versions adopt the legacy schema, add active-run/outbox 
 
 ## Remaining full-design contracts
 
-Modules will accept typed, server-validated inputs and share one global budget. Discovery uses default/missing/wildcard controls. API ownership checks use six known two-actor fixture scenarios with secure and deliberately vulnerable counterparts. Only their synthetic proof can be fixture-confirmed. Parameter reflection and duplicate-value observations remain informational signals, not proof of XSS/SQL injection or parser-bypass defects. Custom cases are bounded JSON, never code. DNS discoveries do not authorize new HTTP targets. Reporting is authenticated JSON and escaped printable HTML. Remediation is rule-linked advice, manual fixture changes and linked retest, not automatic deployment.
+Modules will accept typed, server-validated inputs and share one global budget. Discovery uses default/missing/wildcard controls. API ownership checks use six known two-actor fixture scenarios with secure and deliberately vulnerable counterparts. Only their synthetic proof can be fixture-confirmed. Parameter reflection and duplicate-value observations remain informational signals, not proof of XSS/SQL injection or parser-bypass defects. Custom cases are bounded JSON GET expectations on three fixture paths, never code. Up to three normalized immutable cases/version are stored with each run. Version 7 adds case snapshot/version fields. DNS discoveries do not authorize new HTTP targets. Reporting is authenticated JSON and escaped printable HTML. Remediation is rule-linked advice, manual fixture changes and linked retest, not automatic deployment.
 
 Planned additions: per-module records/progress, custom-case versions, report snapshots, finding review and retest links; capability flags and schema versions evolve with tests. Keep one user/worker/stack rather than adding SaaS/scaling infrastructure.
 
