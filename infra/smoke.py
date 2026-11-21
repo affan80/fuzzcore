@@ -83,6 +83,7 @@ findings=request('/v1/scans/'+scan['id']+'/findings')
 assert detail['attempted']==detail['planned']==19
 parameter_findings=[f for f in findings if f['module']=='parameters']
 assert len(findings)==7 and len(parameter_findings)==2
+assert all(f['evidence']['parameter_discovery']=={'name':'q','scope':'fixed_fixture_only','distinct_marker_controls':True} for f in parameter_findings)
 assert all(f['severity']=='informational' and f['confidence']=='signal' for f in parameter_findings)
 # Maximum custom-case plan shares the same counter and immutable version.
 cases=[{'path':'/health','method':'GET','params':{},'expect_status':200,'contains':'fixture'},
