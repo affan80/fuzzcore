@@ -45,7 +45,7 @@ def test_capabilities_never_advertise_unimplemented_modules(client):
     assert body['modules']['directories']['supported'] is True
     for key in ['vhosts','api','parameters','custom','subdomains']:
         assert body['modules'][key]['supported'] is True
-    assert body['profile']['max_attempts'] == 34
+    assert body['profile']['max_attempts'] == 38
     assert submit(c, 'unsupported-001', modules=['unknown']).status_code == 422
 
 
