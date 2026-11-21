@@ -43,11 +43,13 @@ def create_app(sessions, enqueue, token):
         modules: list[Literal['directories','vhosts','api','parameters','custom','subdomains']] = ['directories']
 
         retest_of:str|None=Field(default=None,min_length=1,max_length=64)
+        api_cases:list[Literal['inventory-v1']]=Field(default_factory=list,max_length=1)
         directory_cases:list[Literal['canary-v1','upload-v1']]=Field(default_factory=list,max_length=2)
         custom_cases:list[CustomCase]=Field(default_factory=list,max_length=3)
 
         @model_validator(mode='after')
         def custom_scope(self):
+            if self.api_cases and 'api' not in self.modules:raise ValueError('Inventory cases require API module')
             if len(self.directory_cases)!=len(set(self.directory_cases)):raise ValueError('Select directory cases once')
             if self.directory_cases and 'directories' not in self.modules:raise ValueError('Directory cases require the directories module')
             if ('custom' in self.modules and not 1<=len(self.custom_cases)<=3) or ('custom' not in self.modules and self.custom_cases):
@@ -71,8 +73,9 @@ def create_app(sessions, enqueue, token):
             'modules': {name: {'supported': name in ('directories','vhosts','api','parameters','custom','subdomains'),
                               'reason': None if name in ('directories','vhosts','api','parameters','custom','subdomains') else 'not_implemented'}
                         for name in ('directories', 'vhosts', 'api', 'parameters', 'custom', 'subdomains')},
-            'profile': {'id': 'lab-small', 'max_attempts': 34,
+            'profile': {'id': 'lab-small', 'max_attempts': 38,
                         'requests_per_second': 2, 'concurrency': 1},
+            'api_cases':{'inventory-v1':{'requests':4,'default':False,'mode':'curated_read_only_fixture'}},
             'directory_cases':{'upload-v1':{'requests':6,'cleanup_reserve':2,'mode':'fixed_benign_in_memory','default':False,'ttl_seconds':300},'canary-v1':{'requests':3,'mode':'synthetic_read_only','default':False}},
             'saved_custom_cases':{'supported':True,'immutable':True,'max_versions':100,'list_limit':50,'max_cases_per_version':3},
             'custom_case_schema':{'version':'declarative-v2','methods':['GET','POST'],'post_paths':['/custom-disposable'],'response_header_names':['content-type','x-fixture-mode'],'max_body_marker_length':64,'max_cases':3},
@@ -94,13 +97,13 @@ def create_app(sessions, enqueue, token):
             if body.retest_of:
                 original=owned(db,body.retest_of,owner)
                 if original.status not in TERMINAL:raise HTTPException(409,'original_scan_not_terminal')
-                if original.directory_cases!=json.dumps(sorted(body.directory_cases)) or original.selected_modules.split(',')!=sorted(body.modules) or original.custom_cases!=canonical([c.model_dump() for c in body.custom_cases]):
+                if original.api_cases!=json.dumps(sorted(body.api_cases)) or original.directory_cases!=json.dumps(sorted(body.directory_cases)) or original.selected_modules.split(',')!=sorted(body.modules) or original.custom_cases!=canonical([c.model_dump() for c in body.custom_cases]):
                     raise HTTPException(422,'retest_requires_same_scope_and_cases')
             row = db.scalar(select(Scan).where(Scan.owner == owner, Scan.request_key == idempotency_key))
             if not row:
                 if 'upload-v1' in body.directory_cases and db.scalar(select(Scan.id).where(Scan.owner==owner,Scan.cleanup_status.in_(['pending','unverified'])).limit(1)):
                     raise HTTPException(409,'pending_upload_cleanup')
-                row = Scan(directory_cases=json.dumps(sorted(body.directory_cases)),module_progress=json.dumps(initial_progress(sorted(body.modules),body.custom_cases,body.directory_cases)),id=str(uuid.uuid4()), owner=owner, request_key=idempotency_key, retest_of=body.retest_of, authorization_confirmed_at=utcnow(), selected_modules=','.join(sorted(body.modules)), custom_cases=canonical([c.model_dump() for c in body.custom_cases]), case_version=version([c.model_dump() for c in body.custom_cases]) if body.custom_cases else None, planned=planned_attempts(body.modules,body.custom_cases,body.directory_cases))
+                row = Scan(api_cases=json.dumps(sorted(body.api_cases)),directory_cases=json.dumps(sorted(body.directory_cases)),module_progress=json.dumps(initial_progress(sorted(body.modules),body.custom_cases,body.directory_cases,body.api_cases)),id=str(uuid.uuid4()), owner=owner, request_key=idempotency_key, retest_of=body.retest_of, authorization_confirmed_at=utcnow(), selected_modules=','.join(sorted(body.modules)), custom_cases=canonical([c.model_dump() for c in body.custom_cases]), case_version=version([c.model_dump() for c in body.custom_cases]) if body.custom_cases else None, planned=planned_attempts(body.modules,body.custom_cases,body.directory_cases,body.api_cases))
                 db.add(row)
                 db.add(EnqueueIntent(scan_id=row.id))
                 try:
@@ -110,7 +113,7 @@ def create_app(sessions, enqueue, token):
                     row = db.scalar(select(Scan).where(Scan.owner == owner, Scan.request_key == idempotency_key))
                     if not row:
                         raise HTTPException(409, 'active_scan_exists')
-            if row.directory_cases!=json.dumps(sorted(body.directory_cases)) or row.retest_of!=body.retest_of or row.selected_modules.split(',') != sorted(body.modules) or row.custom_cases != canonical([c.model_dump() for c in body.custom_cases]):
+            if row.api_cases!=json.dumps(sorted(body.api_cases)) or row.directory_cases!=json.dumps(sorted(body.directory_cases)) or row.retest_of!=body.retest_of or row.selected_modules.split(',') != sorted(body.modules) or row.custom_cases != canonical([c.model_dump() for c in body.custom_cases]):
                 raise HTTPException(409, 'idempotency_scope_mismatch')
             scan_id = row.id
         if not dispatch_one(sessions, enqueue, scan_id):
@@ -182,7 +185,7 @@ def create_app(sessions, enqueue, token):
             if not item or item.scan_id!=scan_id:raise HTTPException(404,'finding_not_found')
             if body.state=='fixed':
                 retest=owned(db,body.retest_scan_id,owner)
-                if retest.retest_of!=original.id or retest.status!='completed' or original.status not in TERMINAL or any(getattr(retest,key)!=getattr(original,key) for key in ('target_id','scope_version','selected_modules','custom_cases','case_version','directory_cases')):
+                if retest.retest_of!=original.id or retest.status!='completed' or original.status not in TERMINAL or any(getattr(retest,key)!=getattr(original,key) for key in ('target_id','scope_version','selected_modules','custom_cases','case_version','directory_cases','api_cases')):
                     raise HTTPException(409,'complete_matched_scope_linked_retest_required')
                 if retest.cleanup_status in ('pending','unverified'):raise HTTPException(409,'retest_cleanup_unverified')
                 if any(fingerprint(new)==fingerprint(item) for new in db.scalars(select(Finding).where(Finding.scan_id==retest.id))):raise HTTPException(409,'finding_still_observed')
@@ -223,7 +226,7 @@ def create_app(sessions, enqueue, token):
 
 
 def serialize(row):
-    return {'cleanup_status':row.cleanup_status,'cleanup_attempted':row.cleanup_attempted,'directory_cases':json.loads(row.directory_cases),'module_progress':progress_for(row),'progress_available':bool(json.loads(row.module_progress)),'modules':row.selected_modules.split(','),'custom_cases':json.loads(row.custom_cases),'case_version':row.case_version,'retest_of':row.retest_of, **{key: getattr(row, key) for key in ('id', 'status', 'attempted', 'planned', 'created_at', 'updated_at', 'error', 'target_id', 'scope_version', 'authorization_confirmed_at')}}
+    return {'api_cases':json.loads(row.api_cases),'cleanup_status':row.cleanup_status,'cleanup_attempted':row.cleanup_attempted,'directory_cases':json.loads(row.directory_cases),'module_progress':progress_for(row),'progress_available':bool(json.loads(row.module_progress)),'modules':row.selected_modules.split(','),'custom_cases':json.loads(row.custom_cases),'case_version':row.case_version,'retest_of':row.retest_of, **{key: getattr(row, key) for key in ('id', 'status', 'attempted', 'planned', 'created_at', 'updated_at', 'error', 'target_id', 'scope_version', 'authorization_confirmed_at')}}
 
 
 def production_app():

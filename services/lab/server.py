@@ -108,6 +108,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(status);self.send_header('Content-Type','application/json')
             self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
             return
+        if parsed.path.startswith('/api/inventory/'):
+            route=parsed.path.removeprefix('/api/inventory/');known=route in ('public','protected','hidden')
+            status=401 if route=='protected' else 200 if known else 404
+            body=json.dumps({'fixture':True,'route':route if known else 'missing'}).encode()
+            self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('X-Content-Type-Options','nosniff')
+            self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
         if self.path.startswith('/api/fixture/'):
             actor = self.headers.get('X-Fixture-Actor')
             objects = {'alice-owned':'alice','bob-owned':'bob','bob-vulnerable':'bob'}

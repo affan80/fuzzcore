@@ -30,7 +30,7 @@ def cleanup(sessions,scan_id,probe,pause=time.sleep):
     with sessions() as db:
         row=db.get(Scan,scan_id)
         if row.cleanup_status not in ('pending','unverified'):return row.cleanup_status=='verified_absent'
-        if row.cleanup_attempted>2 or row.attempted+2>min(row.planned,34):return False
+        if row.cleanup_attempted>2 or row.attempted+2>min(row.planned,38):return False
     for action in ('delete','verify'):
         pause(0.5)
         with sessions() as db:
@@ -66,7 +66,7 @@ def run_upload(sessions,scan_id,probe,*,clock,started,pause=time.sleep):
                 if row.status!='running':return
                 if clock()-started>300:
                     row.status='timed_out';db.commit();return
-                if row.attempted>=min(row.planned-2,32):raise ValueError('Upload budget exhausted')
+                if row.attempted>=min(row.planned-2,36):raise ValueError('Upload budget exhausted')
                 if action=='create':row.cleanup_status='pending'
                 row.attempted+=1;advance_progress(row,'directories');row.updated_at=utcnow();db.commit()
             result=probe(action);values[action]=result

@@ -113,4 +113,4 @@ def test_v13_migration_does_not_invent_fixed_review_evidence(tmp_path):
     s=database('sqlite:///'+str(tmp_path/'review.db'))
     with s() as db:
         item=db.get(Finding,'api-high');assert item.review_state=='open' and item.review_retest_id is None and item.reviewed_at is None
-        assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==14
+        assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==15

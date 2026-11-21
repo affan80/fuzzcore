@@ -8,7 +8,7 @@ def upgrade(engine, metadata, active_index):
     with engine.begin() as connection:
         connection.execute(text('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)'))
         version = connection.execute(text('SELECT COALESCE(MAX(version), 0) FROM schema_migrations')).scalar_one()
-        if version > 14:
+        if version > 15:
             raise RuntimeError('Database schema is newer than this application')
         if version < 1:
             metadata.create_all(connection)
@@ -108,3 +108,8 @@ def upgrade(engine, metadata, active_index):
             for name in ('review_retest_id','reviewed_at'):
                 if name not in columns:connection.execute(text(f'ALTER TABLE findings ADD COLUMN {name} VARCHAR'))
             connection.execute(text('INSERT INTO schema_migrations (version) VALUES (14)'))
+
+        if version < 15:
+            columns={c['name'] for c in inspect(connection).get_columns('scans')}
+            if 'api_cases' not in columns:connection.execute(text("ALTER TABLE scans ADD COLUMN api_cases TEXT NOT NULL DEFAULT '[]'"))
+            connection.execute(text('INSERT INTO schema_migrations (version) VALUES (15)'))

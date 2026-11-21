@@ -48,7 +48,7 @@ def test_upload_scope_is_explicit_immutable_and_reserves_cleanup_budget(tmp_path
     assert r.status_code==409
     caps=c.get('/v1/capabilities').json()
     assert caps['directory_cases']['upload-v1']['requests']==6 and caps['directory_cases']['upload-v1']['cleanup_reserve']==2
-    assert caps['profile']['max_attempts']==34
+    assert caps['profile']['max_attempts']==38
 
 
 def test_real_benign_roundtrip_verifies_deletion_and_unused_reserve(tmp_path,fixture_server):
@@ -194,7 +194,7 @@ def test_old_rows_migrate_without_cleanup_obligation(tmp_path):
     s=database('sqlite:///'+str(tmp_path/'upload.db'))
     with s() as db:
         assert db.get(Scan,id).cleanup_status=='not_required' and db.get(Scan,id).cleanup_attempted==0
-        assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==14
+        assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==15
 
 
 def test_pending_cleanup_blocks_new_upload_but_not_read_only_scans(tmp_path):

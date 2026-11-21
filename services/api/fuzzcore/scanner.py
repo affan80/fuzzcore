@@ -81,6 +81,16 @@ def create_scanner(transport=None, delay=time.sleep):
                 return result
         finally:
             lock.release()
+    @app.get('/inventory-check')
+    def inventory_check(case:Literal['control','public','protected','hidden']):
+        from .api_inventory import http_inventory_probe
+        if not lock.acquire(blocking=False):raise HTTPException(429,'probe_busy')
+        try:
+            with httpx.Client(base_url=validate_lab_origin('http://lab:8081'),transport=transport,timeout=10,follow_redirects=False,trust_env=False) as client:
+                try:result=http_inventory_probe(client)(case)
+                except (httpx.HTTPError,ValueError):raise HTTPException(502,'inventory_evidence_unavailable')
+                delay(0.5);return result
+        finally:lock.release()
     @app.get('/api-check')
     def api_check(case: Literal['missing','anonymous','alice-own','alice-denied','bob-own','alice-cross']):
         from .api_checks import http_api_probe

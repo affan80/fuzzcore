@@ -30,6 +30,7 @@ class Scan(Base):
     scope_version = Column(String, nullable=False, default='lab-v1')
     authorization_confirmed_at = Column(String, nullable=True)
     custom_cases = Column(Text, nullable=False, default='[]')
+    api_cases=Column(Text,nullable=False,default='[]')
     directory_cases = Column(Text,nullable=False,default='[]')
     cleanup_status=Column(String,nullable=False,default='not_required')
     cleanup_attempted=Column(Integer,nullable=False,default=0)
@@ -115,7 +116,7 @@ def validate_lab_origin(origin):
     return 'http://lab:8081'
 
 
-def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None, dns_probe=None, directory_probe=None, file_probe=None, upload_probe=None):
+def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None, dns_probe=None, directory_probe=None, file_probe=None, upload_probe=None,inventory_probe=None):
     """Cooperative, single-worker fixture discovery. probe accepts fixed paths only."""
     with sessions() as db:
         claimed = db.execute(update(Scan).where(
@@ -131,11 +132,12 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
         modules = row.selected_modules.split(',')
         custom_cases = json.loads(row.custom_cases)
         directory_cases=json.loads(row.directory_cases)
+        api_cases=json.loads(row.api_cases)
         case_version = row.case_version
         # Legacy queued jobs have no fine-grained history. Start tracking only
         # once this worker owns a fresh, unattempted execution.
         if not json.loads(row.module_progress) and row.attempted==0:
-            row.module_progress=json.dumps(initial_progress(modules,custom_cases,directory_cases));db.commit()
+            row.module_progress=json.dumps(initial_progress(modules,custom_cases,directory_cases,api_cases));db.commit()
     from .vhosts import CASES, discover
     directory_paths=(PATHS[-1],*PATHS[:-1]) if directory_probe is not None else PATHS
     plan = ([('directories', path) for path in directory_paths] if 'directories' in modules else [])
@@ -148,6 +150,9 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
     plan += ([('vhosts', case) for case in CASES] if 'vhosts' in modules else [])
     from .api_checks import CASES as API_CASES, assess
     plan += ([('api', case) for case in API_CASES] if 'api' in modules else [])
+    from .api_inventory import CASES as INVENTORY_CASES,assess as assess_inventory,valid_control
+    inventory_results={}
+    if 'api' in modules and 'inventory-v1' in api_cases:plan += [('api','inventory:'+case) for case in INVENTORY_CASES]
     directory_results = {}
     vhost_results = {}
     from .parameters import CASES as PARAM_CASES, assess as assess_parameters
@@ -159,7 +164,7 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
     dns_results = {}
     parameter_results = {}
     try:
-        if not plan or len(plan)+5*('upload-v1' in directory_cases) > 34 or set(directory_cases)-{'canary-v1','upload-v1'} or len(directory_cases)!=len(set(directory_cases)) or (directory_cases and 'directories' not in modules) or set(modules) - {'directories','vhosts','api','parameters','custom','subdomains'}:
+        if not plan or len(plan)+5*('upload-v1' in directory_cases) > 38 or set(api_cases)-{'inventory-v1'} or len(api_cases)!=len(set(api_cases)) or (api_cases and 'api' not in modules) or set(directory_cases)-{'canary-v1','upload-v1'} or len(directory_cases)!=len(set(directory_cases)) or (directory_cases and 'directories' not in modules) or set(modules) - {'directories','vhosts','api','parameters','custom','subdomains'}:
             raise ValueError('Unsupported run plan')
         for module, path in plan:
             if path=='upload:roundtrip':
@@ -176,17 +181,18 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                     row.status = 'cancelled'; row.updated_at = utcnow(); settle_progress(row); db.commit(); return
                 if row.status != 'running':
                     return
-                if row.attempted >= row.planned or row.attempted >= 34:
+                if row.attempted >= row.planned or row.attempted >= 38:
                     raise ValueError('Request budget exhausted')
                 if clock() - started > 300:
                     row.status = 'timed_out'; row.updated_at = utcnow(); settle_progress(row); db.commit(); return
                 row.attempted += 1; advance_progress(row,module); row.updated_at = utcnow(); db.commit()
-            result = file_probe(path.split(':',1)[1]) if module=='directories' and path.startswith('canary:') else directory_probe(path) if module=='directories' and directory_probe is not None else vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else custom_probe(path) if module == 'custom' else dns_probe(path) if module == 'subdomains' else None
+            result = inventory_probe(path.split(':',1)[1]) if module=='api' and path.startswith('inventory:') else file_probe(path.split(':',1)[1]) if module=='directories' and path.startswith('canary:') else directory_probe(path) if module=='directories' and directory_probe is not None else vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else custom_probe(path) if module == 'custom' else dns_probe(path) if module == 'subdomains' else None
             status = (200 if result['rcode'] in (0,3) else 502) if module=='subdomains' else result['status_code'] if result is not None else probe(path)
             if module=='directories' and path.startswith('canary:'):
                 file_results[path.split(':',1)[1]]=result
             elif module=='directories' and directory_probe is not None:
                 directory_results[path]=result
+            if module=='api' and path.startswith('inventory:'):inventory_results[path.split(':',1)[1]]=result
             if module == 'vhosts':
                 vhost_results[path] = result
             elif module == 'api':
@@ -218,6 +224,10 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                             status_code=found['status_code'], module='vhosts',
                             evidence=json.dumps(found['evidence']),
                             summary='Lab virtual host differs from default and random-host controls; discovery only.'))
+                if module=='api' and path=='inventory:control' and not valid_control(result):
+                    row.status='failed';row.error='inventory_control_unavailable';fail_module(row,module);settle_progress(row);db.commit();return
+                if module=='api' and path=='inventory:hidden':
+                    for found in assess_inventory(inventory_results):db.add(Finding(id=str(uuid.uuid4()),scan_id=scan_id,path=found['path'],status_code=found['status_code'],module='api',severity='informational',confidence='observed',summary=found['summary'],evidence=json.dumps(found['evidence'])))
                 if module == 'api' and path == 'alice-cross':
                     found = assess(api_results)
                     if found:
@@ -318,5 +328,9 @@ def execute_job(scan_id):
             response=client.get('/dns-check',params={'case':case})
             response.raise_for_status()
             return response.json()
+        def inventory_probe(case):
+            from .api_inventory import CASES
+            if case not in CASES:raise ValueError('Unknown inventory case')
+            response=client.get('/inventory-check',params={'case':case});response.raise_for_status();return response.json()
         from .uploads import scanner_upload_probe
-        run_scan(scan_id, sessions, probe,upload_probe=scanner_upload_probe(client,scan_id), vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe, dns_probe=dns_probe, directory_probe=directory_probe,file_probe=file_probe)
+        run_scan(scan_id, sessions, probe,inventory_probe=inventory_probe,upload_probe=scanner_upload_probe(client,scan_id), vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe, dns_probe=dns_probe, directory_probe=directory_probe,file_probe=file_probe)

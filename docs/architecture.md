@@ -89,3 +89,8 @@ Authenticated version library validates/saves/lists/retrieves one to three decla
 ### Report filters and manual fixed review
 
 Shared validated filters apply to findings, JSON/HTML exports and new immutable snapshots, with matching totals and visible unfiltered counts. Fixed remains an explicit manual review label: a note plus completed owner-scoped exact-scope linked retest where the fingerprint was not observed. Partial, still-observed or unresolved-cleanup evidence is rejected. Original evidence remains intact; no automatic fix or source deployment. See [filter/review evidence](report-filter-review-evidence.md).
+
+
+### Explicit curated API inventory
+
+Opt-in immutable `inventory-v1` adds4 read-only fixed lab requests after the existing6 API ownership checks: randomized missing control and named public/protected/hidden routes. Header/transport facts are informational, not production weakness claims. No arbitrary schema import or redirects. Defaults never expand. All current options reserve38/use36 maximum requests with2 unused cleanup reserves. See [API inventory evidence](api-inventory-evidence.md).
