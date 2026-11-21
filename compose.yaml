@@ -47,13 +47,20 @@ services:
     build: services/api
     command: [uvicorn, fuzzcore.scanner:app, --host, 0.0.0.0, --port, '8082']
     networks: [control, labnet]
-    depends_on: [lab]
+    depends_on: [lab, dns-lab]
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   lab:
     build: services/lab
+    networks: [labnet]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  dns-lab:
+    build: services/api
+    command: [python, -m, fuzzcore.dns_fixture]
     networks: [labnet]
     read_only: true
     cap_drop: [ALL]
