@@ -10,6 +10,7 @@ class Handler(BaseHTTPRequestHandler):
 
     parameter_signals = True
     directory_soft404 = False
+    allow_seeded_canary = True
 
     def do_POST(self):
         # Named stateless disposable scenario: no files, DB changes or retained data.
@@ -31,6 +32,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed=urlsplit(self.path)
+        if parsed.path=='/file-fixture':
+            # Symbolic dictionary response only. Never opens, resolves or includes a file.
+            values=parse_qs(parsed.query,max_num_fields=1).get('name',[])
+            name=values[0] if len(values)==1 else ''
+            status,body=403,b'denied'
+            if name=='public.txt':status,body=200,b'FUZZCORE_PUBLIC_FIXTURE_v1'
+            elif name=='../canary.txt' and self.allow_seeded_canary:status,body=200,b'FUZZCORE_SYNTHETIC_CANARY_v1'
+            self.send_response(status);self.send_header('Content-Type','text/plain')
+            self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+            return
         if parsed.path=='/custom-fixture':
             body=b'custom fixture marker ready'
             self.send_response(200);self.send_header('Content-Type','text/plain')
