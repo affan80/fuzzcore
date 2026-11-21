@@ -237,7 +237,7 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                 if module == 'parameters' and path == 'encoded':
                     for found in assess_parameters(parameter_results):
                         db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=found['path'],
-                            status_code=200, module='parameters', severity='informational', confidence='signal',
+                            status_code=found.get('status_code',200), module='parameters', severity='informational', confidence='signal',
                             evidence=json.dumps(found['evidence']), summary=found['summary']))
                 if module == 'custom':
                     db.add(Finding(id=str(uuid.uuid4()),scan_id=scan_id,path=path['path'],
