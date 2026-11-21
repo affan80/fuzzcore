@@ -81,7 +81,7 @@ def validate_lab_origin(origin):
     return 'http://lab:8081'
 
 
-def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None):
+def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None):
     """Cooperative, single-worker fixture discovery. probe accepts fixed paths only."""
     with sessions() as db:
         claimed = db.execute(update(Scan).where(
@@ -100,9 +100,12 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
     from .api_checks import CASES as API_CASES, assess
     plan += ([('api', case) for case in API_CASES] if 'api' in modules else [])
     vhost_results = {}
+    from .parameters import CASES as PARAM_CASES, assess as assess_parameters
+    plan += ([('parameters', case) for case in PARAM_CASES] if 'parameters' in modules else [])
     api_results = {}
+    parameter_results = {}
     try:
-        if not plan or len(plan) > 13 or set(modules) - {'directories','vhosts','api'}:
+        if not plan or len(plan) > 19 or set(modules) - {'directories','vhosts','api','parameters'}:
             raise ValueError('Unsupported run plan')
         for module, path in plan:
             with sessions() as db:
@@ -111,17 +114,19 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                     row.status = 'cancelled'; row.updated_at = utcnow(); db.commit(); return
                 if row.status != 'running':
                     return
-                if row.attempted >= row.planned or row.attempted >= 13:
+                if row.attempted >= row.planned or row.attempted >= 19:
                     raise ValueError('Request budget exhausted')
                 if clock() - started > 300:
                     row.status = 'timed_out'; row.updated_at = utcnow(); db.commit(); return
                 row.attempted += 1; row.updated_at = utcnow(); db.commit()
-            result = vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else None
+            result = vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else None
             status = result['status_code'] if result is not None else probe(path)
             if module == 'vhosts':
                 vhost_results[path] = result
             elif module == 'api':
                 api_results[path] = result
+            elif module == 'parameters':
+                parameter_results[path] = result
             with sessions() as db:
                 row = db.get(Scan, scan_id)
                 row.updated_at = utcnow()
@@ -140,6 +145,11 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                     if found:
                         db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=found['path'],
                             status_code=200, module='api', severity=found['severity'], confidence=found['confidence'],
+                            evidence=json.dumps(found['evidence']), summary=found['summary']))
+                if module == 'parameters' and path == 'encoded':
+                    for found in assess_parameters(parameter_results):
+                        db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=found['path'],
+                            status_code=200, module='parameters', severity='informational', confidence='signal',
                             evidence=json.dumps(found['evidence']), summary=found['summary']))
                 if status == 429:
                     row.status = 'failed'; row.error = 'target_rate_limited'; db.commit(); return
@@ -191,4 +201,10 @@ def execute_job(scan_id):
             response = client.get('/api-check', params={'case':case})
             response.raise_for_status()
             return response.json()
-        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe)
+        def parameter_probe(case):
+            from .parameters import CASES
+            if case not in CASES:raise ValueError('Out-of-scope parameter case')
+            response=client.get('/parameter-check',params={'case':case})
+            response.raise_for_status()
+            return response.json()
+        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe)
