@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .core import Scan, Finding, EnqueueIntent, ReportSnapshot, database, utcnow, TERMINAL
 from .reports import finding_json,report,render_html
+from .report_filters import report_filters,matching,fingerprint
 from .outbox import dispatch_one
 from .progress import initial_progress, progress_for, settle_progress, planned_attempts
 from .custom_cases import CustomCase, canonical, version
@@ -140,10 +141,10 @@ def create_app(sessions, enqueue, token):
             return serialize(row)
 
     @app.get('/v1/scans/{scan_id}/findings')
-    def findings(scan_id: str, owner=Depends(auth)):
+    def findings(scan_id: str, owner=Depends(auth),filters=Depends(report_filters)):
         with sessions() as db:
             owned(db, scan_id, owner)
-            return [finding_json(r) for r in db.scalars(select(Finding).where(Finding.scan_id==scan_id).limit(100))]
+            return matching([finding_json(r) for r in db.scalars(select(Finding).where(Finding.scan_id==scan_id).order_by(Finding.id).limit(100))],filters)
 
     @app.get('/v1/scans/{scan_id}/retest-comparison')
     def comparison(scan_id:str,owner=Depends(auth)):
@@ -163,35 +164,48 @@ def create_app(sessions, enqueue, token):
 
     class Review(BaseModel):
         model_config=ConfigDict(extra='forbid')
-        state:Literal['open','acknowledged','retest_requested']
+        state:Literal['open','acknowledged','retest_requested','fixed']
         note:str=Field(default='',max_length=500)
+        retest_scan_id:str|None=Field(default=None,min_length=1,max_length=64)
+
+        @model_validator(mode='after')
+        def fixed_evidence(self):
+            if self.state=='fixed' and (not self.note.strip() or not self.retest_scan_id):raise ValueError('Manual review note and completed linked retest are required')
+            if self.state!='fixed' and self.retest_scan_id:raise ValueError('Retest reference only accompanies fixed review')
+            return self
 
     @app.patch('/v1/scans/{scan_id}/findings/{finding_id}/review')
     def review(scan_id:str,finding_id:str,body:Review,owner=Depends(auth)):
         with sessions() as db:
-            owned(db,scan_id,owner)
+            original=owned(db,scan_id,owner)
             item=db.get(Finding,finding_id)
             if not item or item.scan_id!=scan_id:raise HTTPException(404,'finding_not_found')
-            item.review_state=body.state;item.review_note=body.note;db.commit()
+            if body.state=='fixed':
+                retest=owned(db,body.retest_scan_id,owner)
+                if retest.retest_of!=original.id or retest.status!='completed' or original.status not in TERMINAL or any(getattr(retest,key)!=getattr(original,key) for key in ('target_id','scope_version','selected_modules','custom_cases','case_version','directory_cases')):
+                    raise HTTPException(409,'complete_matched_scope_linked_retest_required')
+                if retest.cleanup_status in ('pending','unverified'):raise HTTPException(409,'retest_cleanup_unverified')
+                if any(fingerprint(new)==fingerprint(item) for new in db.scalars(select(Finding).where(Finding.scan_id==retest.id))):raise HTTPException(409,'finding_still_observed')
+            item.review_state=body.state;item.review_note=body.note;item.review_retest_id=body.retest_scan_id if body.state=='fixed' else None;item.reviewed_at=utcnow();db.commit()
             return finding_json(item)
 
     @app.get('/v1/scans/{scan_id}/report.json')
-    def json_report(scan_id:str,owner=Depends(auth)):
-        with sessions() as db:return report(db,owned(db,scan_id,owner),serialize)
+    def json_report(scan_id:str,owner=Depends(auth),filters=Depends(report_filters)):
+        with sessions() as db:return report(db,owned(db,scan_id,owner),serialize,filters)
 
     @app.get('/v1/scans/{scan_id}/report.html',response_class=HTMLResponse)
-    def html_report(scan_id:str,owner=Depends(auth)):
+    def html_report(scan_id:str,owner=Depends(auth),filters=Depends(report_filters)):
         with sessions() as db:
-            value=report(db,owned(db,scan_id,owner),serialize)
+            value=report(db,owned(db,scan_id,owner),serialize,filters)
             return HTMLResponse(render_html(value),headers={
                 'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
                 'X-Content-Type-Options':'nosniff','Cache-Control':'no-store'})
 
     @app.post('/v1/scans/{scan_id}/report-snapshots',status_code=201)
-    def snapshot(scan_id:str,owner=Depends(auth)):
+    def snapshot(scan_id:str,owner=Depends(auth),filters=Depends(report_filters)):
         with sessions() as db:
             row=owned(db,scan_id,owner)
-            content=report(db,row,serialize)
+            content=report(db,row,serialize,filters)
             item=ReportSnapshot(id=str(uuid.uuid4()),scan_id=scan_id,owner=owner,content=json.dumps(content))
             db.add(item);db.commit()
             return {'id':item.id,'created_at':item.created_at,'report':content}

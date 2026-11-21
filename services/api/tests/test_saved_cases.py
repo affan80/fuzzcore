@@ -88,7 +88,7 @@ def test_migration_adds_empty_saved_case_table_without_changing_run(tmp_path):
         db.execute(text('DROP TABLE saved_case_versions'));db.execute(text('DELETE FROM schema_migrations WHERE version>=13'));db.commit()
     s=database('sqlite:///'+str(tmp_path/'cases.db'));c=TestClient(create_app(s,lambda _:None,TOKEN),headers={'Authorization':'Bearer '+TOKEN})
     assert c.get('/v1/custom-cases').json()==[] and c.get('/v1/scans/'+id).json()==before
-    with s() as db:assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==13
+    with s() as db:assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==14
 
 
 def test_listing_cursor_reaches_older_versions_and_cannot_cross_owner(tmp_path):
