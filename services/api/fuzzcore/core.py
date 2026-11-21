@@ -66,6 +66,8 @@ class Finding(Base):
     confidence = Column(String, nullable=False, default='observed')
     review_state = Column(String,nullable=False,default='open')
     review_note = Column(Text,nullable=False,default='')
+    review_retest_id=Column(String,nullable=True)
+    reviewed_at=Column(String,nullable=True)
 
 
 class SavedCaseVersion(Base):
