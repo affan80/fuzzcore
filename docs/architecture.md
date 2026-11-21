@@ -79,3 +79,8 @@ Migration11 persists directory_cases as an immutable per-run selection. The defa
 ### Benign temporary upload slice
 
 Separate opt-in `upload-v1` adds a fixed in-memory harmless-text create/read/delete/absence check plus two explicit cleanup recovery reserves. Defaults remain 4 directory / 25 full-run attempts. Both canary+upload options reserve 13 directory / 34 maximum full-run attempts; normal maximum execution uses 32 and shows 2 unused reserves. No arbitrary content, filesystem writes, executable bytes or upload-vulnerability claim. Cleanup status/attempts are persisted and exported; unverified cleanup blocks new uploads, not read-only runs. Cancellation still performs reserved cleanup; expiry is a fallback, not proof. See [upload cleanup evidence](upload-cleanup-evidence.md) for test-first results, limits, source references and stop-worker recovery.
+
+
+### Saved immutable case versions
+
+Authenticated version library validates/saves/lists/retrieves one to three declarative cases per immutable version. Saving and loading never queue a scan. Loading copies into the editor and resets consent; later edits never alter past scans. Owner-scoped storage is capped at100 versions by database constraints; keyset pages hold50. Migration13 creates an empty library without inventing past saves. See [saved case evidence](saved-case-evidence.md). No scan budget expansion.

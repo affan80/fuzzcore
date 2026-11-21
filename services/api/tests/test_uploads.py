@@ -194,7 +194,7 @@ def test_old_rows_migrate_without_cleanup_obligation(tmp_path):
     s=database('sqlite:///'+str(tmp_path/'upload.db'))
     with s() as db:
         assert db.get(Scan,id).cleanup_status=='not_required' and db.get(Scan,id).cleanup_attempted==0
-        assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==12
+        assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==13
 
 
 def test_pending_cleanup_blocks_new_upload_but_not_read_only_scans(tmp_path):

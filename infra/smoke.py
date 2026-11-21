@@ -88,7 +88,13 @@ assert all(f['severity']=='informational' and f['confidence']=='signal' for f in
 cases=[{'path':'/health','method':'GET','params':{},'expect_status':200,'contains':'fixture'},
        {'path':'/custom-disposable','method':'POST','params':{},'body':{'marker':'harmless'},'expect_status':200,'contains':'fixture','expect_headers':{'content-type':'application/json','x-fixture-mode':'disposable'}},
        {'path':'/api/status','method':'GET','params':{},'expect_status':404,'contains':''}]
-scan=request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts','api','parameters','custom'],'custom_cases':cases},key='ci-custom-0005')
+before_save=len(request('/v1/scans'))
+saved=request('/v1/custom-cases',{'name':'CI smoke cases','cases':cases})
+assert len(request('/v1/scans'))==before_save
+assert request('/v1/custom-cases')[0]==saved
+assert request('/v1/custom-cases/'+saved['id'])==saved
+assert request('/v1/custom-cases',{'name':'CI smoke cases','cases':cases})==saved
+scan=request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts','api','parameters','custom'],'custom_cases':saved['cases']},key='ci-custom-0005')
 for attempt in range(90):
     detail=request('/v1/scans/'+scan['id'])
     if detail['status']=='completed':break
@@ -96,7 +102,8 @@ for attempt in range(90):
     time.sleep(1)
 else:raise RuntimeError('Custom fixture timed out')
 findings=request('/v1/scans/'+scan['id']+'/findings')
-assert detail['attempted']==detail['planned']==22 and len(detail['case_version'])==64
+assert detail['attempted']==detail['planned']==22 and detail['case_version']==saved['version']
+assert request('/v1/custom-cases/'+saved['id'])==saved
 custom_findings=[f for f in findings if f['module']=='custom']
 assert len(findings)==10 and len(custom_findings)==3
 assert sorted(f['evidence']['passed'] for f in custom_findings)==[False,True,True]

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 import httpx
-from sqlalchemy import create_engine, Column, String, Integer, Text, select, UniqueConstraint, Index, text, update
+from sqlalchemy import create_engine, Column, String, Integer, Text, select, UniqueConstraint, CheckConstraint, Index, text, update
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from .progress import advance_progress, settle_progress, initial_progress, fail_module
@@ -66,6 +66,18 @@ class Finding(Base):
     confidence = Column(String, nullable=False, default='observed')
     review_state = Column(String,nullable=False,default='open')
     review_note = Column(Text,nullable=False,default='')
+
+
+class SavedCaseVersion(Base):
+    __tablename__='saved_case_versions'
+    id=Column(String,primary_key=True)
+    owner=Column(String,nullable=False)
+    name=Column(String,nullable=False)
+    case_version=Column(String,nullable=False)
+    cases=Column(Text,nullable=False)
+    created_at=Column(String,nullable=False,default=utcnow)
+    slot=Column(Integer,nullable=False)
+    __table_args__=(UniqueConstraint('owner','name','case_version'),UniqueConstraint('owner','slot'),CheckConstraint('slot >= 0 AND slot < 100'))
 
 
 class ReportSnapshot(Base):
