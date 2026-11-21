@@ -29,6 +29,7 @@ class Scan(Base):
     authorization_confirmed_at = Column(String, nullable=True)
     custom_cases = Column(Text, nullable=False, default='[]')
     case_version = Column(String, nullable=True)
+    retest_of = Column(String,nullable=True)
     selected_modules = Column(String, nullable=False, default='directories')
     status = Column(String, nullable=False, default='queued')
     attempted = Column(Integer, nullable=False, default=0)
@@ -57,6 +58,17 @@ class Finding(Base):
     evidence = Column(Text, nullable=False, default='{}')
     severity = Column(String, nullable=False, default='informational')
     confidence = Column(String, nullable=False, default='observed')
+    review_state = Column(String,nullable=False,default='open')
+    review_note = Column(Text,nullable=False,default='')
+
+
+class ReportSnapshot(Base):
+    __tablename__='report_snapshots'
+    id=Column(String,primary_key=True)
+    scan_id=Column(String,nullable=False,index=True)
+    owner=Column(String,nullable=False)
+    created_at=Column(String,nullable=False,default=utcnow)
+    content=Column(Text,nullable=False)
 
 
 class EnqueueIntent(Base):
