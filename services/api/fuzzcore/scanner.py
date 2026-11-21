@@ -7,6 +7,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from .core import validate_lab_origin, http_probe
+from .custom_cases import CustomCase
 
 
 def create_scanner(transport=None, delay=time.sleep):
@@ -68,6 +69,18 @@ def create_scanner(transport=None, delay=time.sleep):
             with httpx.Client(base_url=validate_lab_origin('http://lab:8081'),transport=transport,
                               timeout=10,follow_redirects=False,trust_env=False) as client:
                 try:result=http_parameter_probe(client)(case)
+                except (httpx.HTTPError,ValueError):raise HTTPException(502,'fixture_evidence_unavailable')
+                delay(0.5)
+                return result
+        finally:lock.release()
+    @app.post('/custom-check')
+    def custom_check(case:CustomCase):
+        from .custom_cases import http_custom_probe
+        if not lock.acquire(blocking=False):raise HTTPException(429,'probe_busy')
+        try:
+            with httpx.Client(base_url=validate_lab_origin('http://lab:8081'),transport=transport,
+                              timeout=10,follow_redirects=False,trust_env=False) as client:
+                try:result=http_custom_probe(client)(case.model_dump())
                 except (httpx.HTTPError,ValueError):raise HTTPException(502,'fixture_evidence_unavailable')
                 delay(0.5)
                 return result
