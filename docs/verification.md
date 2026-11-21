@@ -86,3 +86,7 @@ Opt-in immutable `inventory-v1` adds4 read-only fixed lab requests after the exi
 ### DNS response boundaries
 
 The unchanged three-query local DNS plan clears recursion-desired, rejects unexpected/truncated envelopes and suppresses A discoveries for aliased answers without following or storing foreign alias targets. Bounded flag metadata is informational, not a DNS vulnerability claim. Local205backend/19mobile, types/web export pass, including real UDP fixture and counted failure. Fresh Docker/APK gates and native acceptance remain separate. See [DNS response evidence](dns-response-evidence.md).
+
+### Parameter recognition and differential signals
+
+The unchanged six-marker plan now exposes fixed q recognition backed by distinct controls. Controlled test-only parser mismatch and named quoted-error counterparts remain informational, preserve actual status and never prove injection or authorization bypass. Defaults and budgets remain unchanged. Local219backend/19mobile, types/web export and real HTTP worker/export checks pass; fresh Docker/APK/native gates remain separate. See [parameter observation evidence](parameter-observation-evidence.md).
