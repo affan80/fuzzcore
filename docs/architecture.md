@@ -4,7 +4,7 @@
 
 React Native Android APK controls a separate server. The full design covers preparation, directories/files, virtual hosts, APIs, parameters, declarative custom cases, subdomains, reporting and remediation/retest. It is a bounded authorized-lab application, not a public scanning service. Explicit authorization confirmation does not prove third-party ownership.
 
-The implementation supports four fixed resource paths , a three-request vhost comparison and six synthetic API ownership checks against one bundled lab. Future modules remain unavailable in `/v1/capabilities` until their positive and negative fixture tests pass. No fake results, automatic exploitation, RCE, credential attacks, arbitrary scripts or auto-deployed fixes.
+The implementation supports four fixed resource paths , a three-request vhost comparison and six synthetic API ownership checks plus six harmless parameter-marker observations against one bundled lab. Future modules remain unavailable in `/v1/capabilities` until their positive and negative fixture tests pass. No fake results, automatic exploitation, RCE, credential attacks, arbitrary scripts or auto-deployed fixes.
 
 ## Flow
 
@@ -33,7 +33,7 @@ All application containers run non-root with dropped capabilities. No Docker soc
 - POST /v1/scans/{id}/cancel
 - GET /v1/scans/{id}/findings
 
-All except liveness require bearer authentication. Scan creation accepts only `local-lab`, `lab-small`, directory/vhost/API module selection and explicit boolean confirmation. Unknown fields and modules fail validation. API response identifiers are `id`, consistently used by the app.
+All except liveness require bearer authentication. Scan creation accepts only `local-lab`, `lab-small`, directory/vhost/API/parameter module selection and explicit boolean confirmation. Unknown fields and modules fail validation. API response identifiers are `id`, consistently used by the app.
 
 ## Persistence and lifecycle
 
@@ -47,7 +47,7 @@ Schema migration ledger versions adopt the legacy schema, add active-run/outbox 
 
 ## Remaining full-design contracts
 
-Modules will accept typed, server-validated inputs and share one global budget. Discovery uses default/missing/wildcard controls. API ownership checks use six known two-actor fixture scenarios with secure and deliberately vulnerable counterparts. Only their synthetic proof can be fixture-confirmed. Parameter reflection/errors remain signals, not proof of XSS/SQL injection. Custom cases are bounded JSON, never code. DNS discoveries do not authorize new HTTP targets. Reporting is authenticated JSON and escaped printable HTML. Remediation is rule-linked advice, manual fixture changes and linked retest, not automatic deployment.
+Modules will accept typed, server-validated inputs and share one global budget. Discovery uses default/missing/wildcard controls. API ownership checks use six known two-actor fixture scenarios with secure and deliberately vulnerable counterparts. Only their synthetic proof can be fixture-confirmed. Parameter reflection and duplicate-value observations remain informational signals, not proof of XSS/SQL injection or parser-bypass defects. Custom cases are bounded JSON, never code. DNS discoveries do not authorize new HTTP targets. Reporting is authenticated JSON and escaped printable HTML. Remediation is rule-linked advice, manual fixture changes and linked retest, not automatic deployment.
 
 Planned additions: per-module records/progress, custom-case versions, report snapshots, finding review and retest links; capability flags and schema versions evolve with tests. Keep one user/worker/stack rather than adding SaaS/scaling infrastructure.
 
