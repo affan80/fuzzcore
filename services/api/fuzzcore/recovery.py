@@ -27,16 +27,23 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--worker-stopped', action='store_true', required=True)
+    parser.add_argument('--cleanup-uploads',action='store_true',help='Use remaining reserved DELETE/absence checks, never repost')
     args = parser.parse_args()
     sessions = database(os.environ['DATABASE_URL'])
     cutoff = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
     interrupted = recover_stale(sessions, cutoff, worker_stopped=args.worker_stopped)
+    cleaned=0
+    if args.cleanup_uploads:
+        import httpx
+        from .uploads import recover_pending_uploads,scanner_upload_probe
+        with httpx.Client(base_url='http://scanner:8082',timeout=12,follow_redirects=False,trust_env=False) as client:
+            cleaned=recover_pending_uploads(sessions,lambda scan_id:scanner_upload_probe(client,scan_id),worker_stopped=args.worker_stopped)
     from redis import Redis
     from rq import Queue
     queue = Queue('scans', connection=Redis.from_url(os.environ['REDIS_URL']))
     def enqueue(scan_id):
         queue.enqueue('fuzzcore.core.execute_job', scan_id, job_id=scan_id, job_timeout=360, result_ttl=3600)
-    print({'interrupted': interrupted, 'outbox': retry_pending(sessions, enqueue)})
+    print({'upload_cleanup_verified':cleaned,'interrupted': interrupted, 'outbox': retry_pending(sessions, enqueue)})
 
 
 if __name__ == '__main__':
