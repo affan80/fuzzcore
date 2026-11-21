@@ -28,14 +28,18 @@ See `parameter-fixture-evidence.md`. Five backend and one mobile-policy regressi
 
 See `custom-fixture-evidence.md`. Fourteen backend cases and one mobile-policy case failed first. Full local suite: 74 backend tests, six mobile-policy tests, TypeScript and web export. Actual loopback UI completed twenty requests using one custom case. The maximum three-case plan is twenty-two requests. Schema rejection, mismatch behavior and immutable case versions are tested. Exact-head CI https://github.com/affan80/fuzzcore/actions/runs/44878113215 passed all four jobs including Docker22 checks and APK, before PR16 merged.
 
-## Local DNS, local verification pending its own CI
+## Local DNS, verified before merge
 
-See `dns-fixture-evidence.md`. Five backend regressions and one mobile-policy regression failed first. Full local suite:79 backend tests,7 mobile tests, TypeScript and web export. Real local UDP positive/wildcard fixtures pass. Actual loopback UI completes23 checks with one custom case. Maximum plan25 checks. DNS container integration and APK are pending their fresh exact-head CI.
+See `dns-fixture-evidence.md`. Five backend regressions and one mobile-policy regression failed first. Full local suite:79 backend tests,7 mobile tests, TypeScript and web export. Real local UDP positive/wildcard fixtures pass. Actual loopback UI completes23 checks with one custom case. Maximum plan25 checks. Exact-head CI https://github.com/affan80/fuzzcore/actions/runs/44879542458 passed all four jobs including Docker25 checks/newDNS and APK before PR17 merged.
+
+## Report/review/retest, local verification pending its own CI
+
+See `report-retest-evidence.md`. Seven failing backend regressions preceded implementation. Full local suite:87backend tests,7mobile tests, types/web export. Real loopback UI proved JSON+HTML downloads, matching totals/review state, immutable snapshot and same-scope linked retest/comparison. Report/mobile pixels inspected. Fresh Docker/APK CI is required; native file share is unverified. npm audit:3moderate Expo fingerprint/minimatch advisories, no high/critical; no blind major downgrade applied.
 
 ## Still unverified or unfinished
 
 - Physical Android install, SecureStore, background/reconnect behavior and trusted phone-to-backend HTTPS. User computer OS and Android device details are still needed.
-- Broader API inventory/transmission assessment, broader DNS inputs and custom POST/header checks; traversal/upload fixture scenarios; report/remediation/retest flow and full-app acceptance.
+- Broader API inventory/transmission assessment, broader DNS inputs and custom POST/header checks; traversal/upload fixture scenarios; richer report/remediation/retest workflow and full-app acceptance.
 - Module-specific progress UI beyond the current shared run counters.
 - All possible egress routes, compromise resistance and production deployment hardening.
 - Recovery of every RQ failure mode. Current recovery handles unsent intents and explicit stale interrupted work; it is not a full distributed scheduler.
