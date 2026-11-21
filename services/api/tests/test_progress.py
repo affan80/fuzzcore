@@ -87,12 +87,12 @@ def test_recovery_marks_only_inflight_progress_interrupted(tmp_path):
 def test_v9_upgrade_does_not_invent_module_results(tmp_path):
     sessions,c,id=setup(tmp_path,['directories'])
     with sessions() as db:
-        db.execute(text('DELETE FROM schema_migrations WHERE version=10'))
+        db.execute(text('DELETE FROM schema_migrations WHERE version>=10'))
         db.execute(text('ALTER TABLE scans DROP COLUMN module_progress'));db.commit()
     sessions=database('sqlite:///'+str(tmp_path/'progress.db'))
     with sessions() as db:
         assert db.get(Scan,id).module_progress=='{}'
-        assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==10
+        assert db.execute(text('SELECT max(version) FROM schema_migrations')).scalar()==11
 
 
 def test_final_response_rate_limit_is_failed_not_completed_module(tmp_path):

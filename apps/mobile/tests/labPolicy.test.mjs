@@ -52,3 +52,12 @@ test('named disposable POST example keeps its bounded body and header expectatio
  assert.deepEqual(buildLabRequest(true,['custom'],[DISPOSABLE_POST_EXAMPLE]).custom_cases,[DISPOSABLE_POST_EXAMPLE]);
  assert.throws(()=>buildLabRequest(false,['custom'],[DISPOSABLE_POST_EXAMPLE]),/Confirm/);
 });
+
+test('synthetic canary is explicit and adds only its named case selection',()=>{
+ const row=buildLabRequest(true,['directories'],[],['canary-v1']);
+ assert.deepEqual(row.directory_cases,['canary-v1']);
+ assert.equal(buildLabRequest(true,['directories']).directory_cases,undefined);
+ for(const modules of [['vhosts'],['custom']])assert.throws(()=>buildLabRequest(true,modules,[],['canary-v1']),/case|directories/);
+ assert.throws(()=>buildLabRequest(true,['directories'],[],['upload-v1']),/case/);
+ assert.throws(()=>buildLabRequest(false,['directories'],[],['canary-v1']),/Confirm/);
+});

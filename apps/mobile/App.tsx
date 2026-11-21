@@ -6,7 +6,7 @@ import { exportReport } from './exportReport';
 import {moduleProgressText,type ModuleProgress} from './moduleProgress';
 import { buildLabRequest, DISPOSABLE_POST_EXAMPLE, type LabModule } from './labPolicy';
 
-type Scan = {module_progress:Partial<Record<LabModule,ModuleProgress>>;progress_available:boolean;id:string; status:string; attempted:number; planned:number; error:string|null; modules:LabModule[]; custom_cases:unknown[]; retest_of:string|null};
+type Scan = {directory_cases:string[];module_progress:Partial<Record<LabModule,ModuleProgress>>;progress_available:boolean;id:string; status:string; attempted:number; planned:number; error:string|null; modules:LabModule[]; custom_cases:unknown[]; retest_of:string|null};
 type Finding = {id:string; path:string; status_code:number; summary:string; module:LabModule; severity:string; confidence:string; review_state:string; review_note:string; evidence?:{rule_id?:string; remediation?:string}};
 const moduleLabels:Record<LabModule,string>={directories:'Directories · 3 resources + random missing-path control',vhosts:'Virtual hosts · 3 control/candidate requests',api:'API fixture · 6 two-actor ownership checks',parameters:'Parameter signals · 6 harmless marker checks',custom:'Custom cases · bounded declarative GET/lab POST checks',subdomains:'DNS fixture · 3 local control/candidate queries'};
 const moduleBudgets:Record<LabModule,number>={directories:4,vhosts:3,api:6,parameters:6,custom:0,subdomains:3};
@@ -19,6 +19,7 @@ export default function App() {
   const [authorized, setAuthorized] = useState(false);
   const [customText,setCustomText]=useState('[{"path":"/health","method":"GET","params":{},"expect_status":200,"contains":"fixture"}]');
   const [modules, setModules] = useState<LabModule[]>(['directories']);
+  const [directoryCases,setDirectoryCases]=useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [scans, setScans] = useState<Scan[]>([]);
@@ -99,7 +100,7 @@ export default function App() {
     await action(async () => {
       let cases:unknown[]=[];
       if(modules.includes('custom')){let value:unknown;try{value=JSON.parse(customText);}catch{throw new Error('Custom cases must be a JSON array.');}if(!Array.isArray(value))throw new Error('Custom cases must be a JSON array.');cases=value;}
-      const body = buildLabRequest(authorized, modules,cases);
+      const body = buildLabRequest(authorized, modules,cases,directoryCases);
       if(!pendingKey.current)pendingKey.current = `mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const row:Scan = await request('/v1/scans',{method:'POST',headers:{'Idempotency-Key':pendingKey.current},body:JSON.stringify(body)});
       pendingKey.current = null; setAuthorized(false);
@@ -114,7 +115,7 @@ export default function App() {
   async function retest() {
     if(!selected || !authorized)throw new Error('Confirm new authorization before this retest.');
     if(!pendingKey.current)pendingKey.current=`mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const body={...buildLabRequest(authorized,selected.modules,selected.custom_cases),retest_of:selected.id};
+    const body={...buildLabRequest(authorized,selected.modules,selected.custom_cases,selected.directory_cases),retest_of:selected.id};
     const row:Scan=await request('/v1/scans',{method:'POST',headers:{'Idempotency-Key':pendingKey.current},body:JSON.stringify(body)});
     pendingKey.current=null;setAuthorized(false);setComparison('');setReport(null);setTab('run');await refresh(row.id);
   }
@@ -134,9 +135,10 @@ export default function App() {
       <View style={s.tabs}>{(['run','history','report'] as const).map(t=><Pressable key={t} onPress={()=>t==='report'?action(openReport):setTab(t)} style={[s.tab,tab===t&&s.tabOn]} accessibilityRole="tab" accessibilityState={{selected:tab===t}}><Text style={s.tabText}>{t==='run'?'Run a scan':t==='history'?'History':'Report'}</Text></Pressable>)}</View>
       {tab==='run' ? <View style={s.card}>
         <Text style={s.label}>APPROVED TARGET</Text><Text style={s.heading}>FuzzCore fixture lab</Text><Text style={s.body}>One fixture destination · 2 requests/sec maximum · no redirects</Text>
-        {(['directories','vhosts','api','parameters','custom','subdomains'] as const).map(module => <View key={module} style={s.notice}><Text style={s.body}>{moduleLabels[module]}</Text><Switch value={modules.includes(module)} disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} accessibilityLabel={`Select ${module} module`} onValueChange={enabled=>{setModules(current=>enabled?[...current,module]:current.filter(m=>m!==module));setAuthorized(false);}}/></View>)}
+        {(['directories','vhosts','api','parameters','custom','subdomains'] as const).map(module => <View key={module} style={s.notice}><Text style={s.body}>{moduleLabels[module]}</Text><Switch value={modules.includes(module)} disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} accessibilityLabel={`Select ${module} module`} onValueChange={enabled=>{setModules(current=>enabled?[...current,module]:current.filter(m=>m!==module));if(module==='directories'&&!enabled)setDirectoryCases([]);setAuthorized(false);}}/></View>)}
+        {modules.includes('directories')&&<View style={s.notice}><Text style={s.body}>Include synthetic file canary: 3 additional read-only lab requests. Symbolic fixture data only, no host file reads or inclusion. Off by default.</Text><Switch accessibilityLabel="Include synthetic file canary checks" value={directoryCases.includes('canary-v1')} disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} onValueChange={enabled=>{setDirectoryCases(enabled?['canary-v1']:[]);setAuthorized(false);}}/></View>}
         {modules.includes('custom') && <><Text style={s.label}>CUSTOM CASES JSON · MAXIMUM 3</Text><Text style={s.body}>GET: /health, /api/status, /custom-fixture. POST: /custom-disposable only, with one harmless marker and no retained data. Optional expected status, literal text and content-type/x-fixture-mode header checks. No code or arbitrary URLs.</Text><TextInput multiline style={[s.input,{minHeight:130}]} value={customText} editable={!busy && !pendingKey.current && (!selected || terminal.has(selected.status))} onChangeText={text=>{setCustomText(text);setAuthorized(false);}} accessibilityLabel="Custom cases JSON" autoCapitalize="none" autoCorrect={false} maxLength={2000}/><Pressable disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} style={s.secondary} accessibilityRole="button" onPress={()=>{setCustomText(JSON.stringify([DISPOSABLE_POST_EXAMPLE],null,2));setAuthorized(false);}}><Text style={s.link}>Use disposable POST example</Text></Pressable></>}
-        <Text style={s.foot}>{modules.reduce((total,module)=>total+moduleBudgets[module],0)} fixed checks plus up to 3 selected custom cases. Every case shares the same request budget. Virtual-host differences are discoveries. API proof applies only to the deliberately seeded synthetic lab.</Text>
+        <Text style={s.foot}>{modules.reduce((total,module)=>total+moduleBudgets[module],0)+3*directoryCases.length} fixed checks plus up to 3 selected custom cases. Every case shares the same request budget. Virtual-host differences are discoveries. API proof applies only to the deliberately seeded synthetic lab.</Text>
         <View style={s.notice}><Text style={s.body}>I am authorized to test this fixed fixture lab. This confirmation does not permit other targets.</Text><Switch value={authorized} onValueChange={setAuthorized} disabled={busy} accessibilityLabel="Confirm authorization for this lab scan" /></View>
         <Pressable disabled={!authorized || !modules.length || busy || (!!selected && !terminal.has(selected.status))} style={[s.button,(!authorized || !modules.length || busy || (!!selected && !terminal.has(selected.status)))&&s.disabled]} onPress={start} accessibilityRole="button"><Text style={s.buttonText}>{busy?'Working…':'Start lab scan'}</Text></Pressable>
         {selected && <><View style={s.divider}/><Text style={s.label}>LATEST RUN</Text><Text style={s.status}>{selected.status.replace('_',' ')}</Text><Text style={s.body}>{selected.attempted} / {selected.planned} checks attempted</Text>
