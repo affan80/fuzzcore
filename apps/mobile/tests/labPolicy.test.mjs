@@ -70,3 +70,11 @@ test('benign upload is explicit, immutable and separate from the read-only canar
  assert.throws(()=>buildLabRequest(true,['api'],[],['upload-v1']),/case/);
  assert.throws(()=>buildLabRequest(true,['directories'],[],['upload-v1','upload-v1']),/case/);
 });
+
+test('curated inventory is explicit and never added to default API scans',()=>{
+ assert.equal(buildLabRequest(true,['api']).api_cases,undefined);
+ assert.deepEqual(buildLabRequest(true,['api'],[],[],['inventory-v1']).api_cases,['inventory-v1']);
+ assert.throws(()=>buildLabRequest(false,['api'],[],[],['inventory-v1']),/Confirm/);
+ for(const cases of [['outside'],['inventory-v1','inventory-v1']])assert.throws(()=>buildLabRequest(true,['api'],[],[],cases),/case/);
+ assert.throws(()=>buildLabRequest(true,['directories'],[],[],['inventory-v1']),/case/);
+});
