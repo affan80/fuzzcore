@@ -82,6 +82,23 @@ assert detail['attempted']==detail['planned']==19
 parameter_findings=[f for f in findings if f['module']=='parameters']
 assert len(findings)==7 and len(parameter_findings)==2
 assert all(f['severity']=='informational' and f['confidence']=='signal' for f in parameter_findings)
+# Maximum custom-case plan shares the same counter and immutable version.
+cases=[{'path':'/health','method':'GET','params':{},'expect_status':200,'contains':'fixture'},
+       {'path':'/custom-fixture','method':'GET','params':{'q':'harmless'},'expect_status':200,'contains':'ready'},
+       {'path':'/api/status','method':'GET','params':{},'expect_status':404,'contains':''}]
+scan=request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts','api','parameters','custom'],'custom_cases':cases},key='ci-custom-0005')
+for attempt in range(90):
+    detail=request('/v1/scans/'+scan['id'])
+    if detail['status']=='completed':break
+    if detail['status'] in ('failed','timed_out'):raise RuntimeError('Custom fixture failed')
+    time.sleep(1)
+else:raise RuntimeError('Custom fixture timed out')
+findings=request('/v1/scans/'+scan['id']+'/findings')
+assert detail['attempted']==detail['planned']==22 and len(detail['case_version'])==64
+custom_findings=[f for f in findings if f['module']=='custom']
+assert len(findings)==10 and len(custom_findings)==3
+assert sorted(f['evidence']['passed'] for f in custom_findings)==[False,True,True]
+assert all(f['evidence']['case_version']==detail['case_version'] for f in custom_findings)
 # Network membership check: scanner has neither data network nor injected data credentials.
 container = subprocess.check_output(['docker','compose','ps','-q','scanner'],text=True).strip()
 config = json.loads(subprocess.check_output(['docker','inspect',container]))[0]
