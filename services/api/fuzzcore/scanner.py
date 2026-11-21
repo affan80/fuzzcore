@@ -29,6 +29,18 @@ def create_scanner(transport=None, delay=time.sleep):
                 return {'status_code': result}
         finally:
             lock.release()
+    @app.get('/directory-check')
+    def directory_check(path:Literal['/','/health','/api/status','/missing-control-7f23']):
+        from .directories import http_directory_probe
+        if not lock.acquire(blocking=False):raise HTTPException(429,'probe_busy')
+        try:
+            with httpx.Client(base_url=validate_lab_origin('http://lab:8081'),transport=transport,
+                              timeout=10,follow_redirects=False,trust_env=False) as client:
+                try:result=http_directory_probe(client)(path)
+                except (httpx.HTTPError,ValueError):raise HTTPException(502,'directory_evidence_unavailable')
+                delay(0.5)
+                return result
+        finally:lock.release()
     @app.get('/vhost')
     def vhost(case: Literal['default','control','seeded']):
         from .vhosts import http_vhost_probe
