@@ -98,3 +98,7 @@ Opt-in immutable `inventory-v1` adds4 read-only fixed lab requests after the exi
 ### DNS response boundaries
 
 DNS questions explicitly clear recursion-desired. Mismatched/truncated envelopes fail closed; IN/A records require the exact requested name and an answer without aliases. No alias target is retained or followed. Stored flag booleans describe only the isolated fixture; they do not assess real recursion exposure, DNSSEC or takeover risk. The three-query budget and fixed destination stay unchanged.
+
+### Parameter recognition and differential signals
+
+The unchanged six-marker plan now exposes fixed q recognition backed by distinct controls. Controlled test-only parser mismatch and named quoted-error counterparts remain informational, preserve actual status and never prove injection or authorization bypass. Defaults and budgets remain unchanged. Local219backend/19mobile, types/web export and real HTTP worker/export checks pass; fresh Docker/APK/native gates remain separate. See [parameter observation evidence](parameter-observation-evidence.md).
