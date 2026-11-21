@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppState, FlatList, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
+import {loadSavedCaseVersion,type SavedCaseVersion} from './savedCases';
 import { exportReport } from './exportReport';
 import {moduleProgressText,type ModuleProgress} from './moduleProgress';
 import { buildLabRequest, DISPOSABLE_POST_EXAMPLE, type LabModule } from './labPolicy';
@@ -17,6 +18,10 @@ export default function App() {
   const [token, setToken] = useState('');
   const [connected, setConnected] = useState(false);
   const [authorized, setAuthorized] = useState(false);
+  const [savedCases,setSavedCases]=useState<SavedCaseVersion[]>([]);
+  const [caseName,setCaseName]=useState('My fixture cases');
+  const [caseSource,setCaseSource]=useState('');
+  const [moreCases,setMoreCases]=useState(false);
   const [customText,setCustomText]=useState('[{"path":"/health","method":"GET","params":{},"expect_status":200,"contains":"fixture"}]');
   const [modules, setModules] = useState<LabModule[]>(['directories']);
   const [directoryCases,setDirectoryCases]=useState<string[]>([]);
@@ -84,13 +89,23 @@ export default function App() {
     finally {setBusy(false);}
   }
 
+  async function loadCases(afterId?:string){
+    const page:SavedCaseVersion[]=await request('/v1/custom-cases'+(afterId?'?after_id='+encodeURIComponent(afterId):''));
+    setSavedCases(current=>afterId?[...current,...page.filter(row=>!current.some(old=>old.id===row.id))]:page);setMoreCases(page.length===50);
+  }
+  async function saveCases(){
+    let cases:unknown;try{cases=JSON.parse(customText);}catch{throw new Error('Custom cases must be a JSON array.');}
+    if(!Array.isArray(cases))throw new Error('Custom cases must be a JSON array.');
+    const row:SavedCaseVersion=await request('/v1/custom-cases',{method:'POST',body:JSON.stringify({name:caseName,cases})});
+    setCaseSource(row.name+' · '+row.version.slice(0,12));await loadCases();
+  }
   async function connect() {
     await action(async () => {
       let url:URL;try {url = new URL(base);} catch {throw new Error('Enter a complete HTTPS API address.');}
       if(url.protocol !== 'https:' && !(Platform.OS==='web' && url.hostname==='localhost' && url.protocol==='http:'))
         throw new Error('Use HTTPS for your API connection.');
       if(url.username || url.password || url.search || url.hash || !token.trim())throw new Error('Check the API address and connection token.');
-      await request('/v1/targets');await refresh();
+      await request('/v1/targets');await refresh();await loadCases();
       if(Platform.OS!=='web') {await SecureStore.setItemAsync('apiBase',base);await SecureStore.setItemAsync('apiToken',token);}
       setConnected(true);
     });
@@ -138,7 +153,8 @@ export default function App() {
         {(['directories','vhosts','api','parameters','custom','subdomains'] as const).map(module => <View key={module} style={s.notice}><Text style={s.body}>{moduleLabels[module]}</Text><Switch value={modules.includes(module)} disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} accessibilityLabel={`Select ${module} module`} onValueChange={enabled=>{setModules(current=>enabled?[...current,module]:current.filter(m=>m!==module));if(module==='directories'&&!enabled)setDirectoryCases([]);setAuthorized(false);}}/></View>)}
         {modules.includes('directories')&&<View style={s.notice}><Text style={s.body}>Include synthetic file canary: 3 additional read-only lab requests. Symbolic fixture data only, no host file reads or inclusion. Off by default.</Text><Switch accessibilityLabel="Include synthetic file canary checks" value={directoryCases.includes('canary-v1')} disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} onValueChange={enabled=>{setDirectoryCases(current=>enabled?[...current.filter(c=>c!=='canary-v1'),'canary-v1']:current.filter(c=>c!=='canary-v1'));setAuthorized(false);}}/></View>}
         {modules.includes('directories')&&<View style={s.notice}><Text style={s.body}>Include benign temporary upload: fixed harmless text in memory only. Create, read, delete and verify absence, plus 2 reserved cleanup requests for operator recovery. Cleanup continues after cancellation; unresolved cleanup blocks new uploads. 5-minute fixture expiry is a fallback, not proof of deletion. No executable files or host filesystem writes. Off by default.</Text><Switch accessibilityLabel="Include benign upload cleanup checks" value={directoryCases.includes('upload-v1')} disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} onValueChange={enabled=>{setDirectoryCases(current=>enabled?[...current.filter(c=>c!=='upload-v1'),'upload-v1']:current.filter(c=>c!=='upload-v1'));setAuthorized(false);}}/></View>}
-        {modules.includes('custom') && <><Text style={s.label}>CUSTOM CASES JSON · MAXIMUM 3</Text><Text style={s.body}>GET: /health, /api/status, /custom-fixture. POST: /custom-disposable only, with one harmless marker and no retained data. Optional expected status, literal text and content-type/x-fixture-mode header checks. No code or arbitrary URLs.</Text><TextInput multiline style={[s.input,{minHeight:130}]} value={customText} editable={!busy && !pendingKey.current && (!selected || terminal.has(selected.status))} onChangeText={text=>{setCustomText(text);setAuthorized(false);}} accessibilityLabel="Custom cases JSON" autoCapitalize="none" autoCorrect={false} maxLength={2000}/><Pressable disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} style={s.secondary} accessibilityRole="button" onPress={()=>{setCustomText(JSON.stringify([DISPOSABLE_POST_EXAMPLE],null,2));setAuthorized(false);}}><Text style={s.link}>Use disposable POST example</Text></Pressable></>}
+        {modules.includes('custom') && <><Text style={s.label}>CUSTOM CASES JSON · MAXIMUM 3</Text><Text style={s.body}>GET: /health, /api/status, /custom-fixture. POST: /custom-disposable only, with one harmless marker and no retained data. Optional expected status, literal text and content-type/x-fixture-mode header checks. No code or arbitrary URLs.</Text><TextInput multiline style={[s.input,{minHeight:130}]} value={customText} editable={!busy && !pendingKey.current && (!selected || terminal.has(selected.status))} onChangeText={text=>{setCustomText(text);setCaseSource('Edited copy, save to create a new immutable version.');setAuthorized(false);}} accessibilityLabel="Custom cases JSON" autoCapitalize="none" autoCorrect={false} maxLength={2000}/><Pressable disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} style={s.secondary} accessibilityRole="button" onPress={()=>{setCustomText(JSON.stringify([DISPOSABLE_POST_EXAMPLE],null,2));setCaseSource('Unsaved disposable POST example.');setAuthorized(false);}}><Text style={s.link}>Use disposable POST example</Text></Pressable></>}
+        {modules.includes('custom')&&<View style={s.notice}><Text style={s.heading}>Saved case versions</Text><Text style={s.body}>Saving or loading never starts a scan. Versions are immutable. Loading copies the cases into this editor and requires fresh authorization; later edits do not change past runs.</Text><TextInput style={s.input} accessibilityLabel="Saved case name" value={caseName} onChangeText={setCaseName} maxLength={80} editable={!busy}/><Pressable style={s.secondary} accessibilityRole="button" disabled={busy||!!pendingKey.current||!!selected&&!terminal.has(selected.status)} onPress={()=>action(saveCases)}><Text style={s.link}>Save immutable case version</Text></Pressable><Pressable style={s.secondary} accessibilityRole="button" disabled={busy} onPress={()=>action(()=>loadCases())}><Text style={s.link}>Refresh saved versions</Text></Pressable>{!!caseSource&&<Text style={s.foot}>Editor source: {caseSource}</Text>}{savedCases.length===0?<Text style={s.body}>No saved versions. Save the validated cases above to reuse them.</Text>:savedCases.map(value=><View key={value.id} style={s.finding}><Text style={s.path}>{value.name}</Text><Text style={s.foot}>{value.version.slice(0,12)} · {value.cases.length} cases · {value.created_at}</Text><Pressable style={s.secondary} accessibilityLabel={`Load saved version ${value.id}`} accessibilityRole="button" disabled={busy||!!pendingKey.current||!!selected&&!terminal.has(selected.status)} onPress={()=>action(async()=>{const row:SavedCaseVersion=await request('/v1/custom-cases/'+value.id);const loaded=loadSavedCaseVersion(row);setCustomText(loaded.text);setCaseSource(loaded.source);setCaseName(row.name);setAuthorized(loaded.authorized);})}><Text style={s.link}>Load version into editor</Text></Pressable></View>)}{moreCases&&<Pressable style={s.secondary} accessibilityRole="button" disabled={busy} onPress={()=>action(()=>loadCases(savedCases[savedCases.length-1]?.id))}><Text style={s.link}>Load older versions</Text></Pressable>}</View>}
         <Text style={s.foot}>{modules.reduce((total,module)=>total+moduleBudgets[module],0)+directoryCases.reduce((total,caseId)=>total+(caseId==='upload-v1'?6:3),0)} maximum budget including selected cleanup reserves, plus up to 3 selected custom cases. Every case shares the same request budget. Virtual-host differences are discoveries. API proof applies only to the deliberately seeded synthetic lab.</Text>
         <View style={s.notice}><Text style={s.body}>I am authorized to test this fixed fixture lab. This confirmation does not permit other targets.</Text><Switch value={authorized} onValueChange={setAuthorized} disabled={busy} accessibilityLabel="Confirm authorization for this lab scan" /></View>
         <Pressable disabled={!authorized || !modules.length || busy || (!!selected && !terminal.has(selected.status))} style={[s.button,(!authorized || !modules.length || busy || (!!selected && !terminal.has(selected.status)))&&s.disabled]} onPress={start} accessibilityRole="button"><Text style={s.buttonText}>{busy?'Working…':'Start lab scan'}</Text></Pressable>
@@ -160,7 +176,7 @@ export default function App() {
         {!!selected?.retest_of&&terminal.has(selected.status)&&<Pressable disabled={busy} style={s.secondary} accessibilityRole="button" onPress={()=>action(async()=>{if(selected)setComparison(JSON.stringify(await request(`/v1/scans/${selected.id}/retest-comparison`),null,2));})}><Text style={s.link}>Compare linked retest</Text></Pressable>}{!!comparison&&<Text selectable style={s.foot}>{comparison}</Text>}
       </>}</View>}
       <Pressable disabled={busy} onPress={()=>action(async()=>refresh(selected?.id))} style={s.secondary} accessibilityRole="button"><Text style={s.link}>Refresh status</Text></Pressable>
-      <Pressable onPress={()=>action(async()=>{setConnected(false);setAuthorized(false);pendingKey.current=null;setToken('');setSelected(null);setReport(null);setSnapshot('');setComparison('');setFindings([]);setScans([]);if(Platform.OS!=='web')await SecureStore.deleteItemAsync('apiToken');})} style={s.secondary} accessibilityRole="button"><Text style={s.muted}>Disconnect and remove token</Text></Pressable>
+      <Pressable onPress={()=>action(async()=>{setConnected(false);setAuthorized(false);pendingKey.current=null;setToken('');setSavedCases([]);setCaseSource('');setMoreCases(false);setSelected(null);setReport(null);setSnapshot('');setComparison('');setFindings([]);setScans([]);if(Platform.OS!=='web')await SecureStore.deleteItemAsync('apiToken');})} style={s.secondary} accessibilityRole="button"><Text style={s.muted}>Disconnect and remove token</Text></Pressable>
     </>}
     {!!error && <View style={s.errorBox} accessibilityRole="alert"><Text style={s.error}>{error}</Text></View>}
     <Text style={s.footer}>LAB / DEVELOPMENT BUILD{ '\n' }Finding a resource does not prove it is vulnerable.</Text>
