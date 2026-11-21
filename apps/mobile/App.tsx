@@ -2,10 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppState, FlatList, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
+import { exportReport } from './exportReport';
 import { buildLabRequest, type LabModule } from './labPolicy';
 
-type Scan = {id:string; status:string; attempted:number; planned:number; error:string|null; modules:LabModule[]};
-type Finding = {id:string; path:string; status_code:number; summary:string; module:LabModule; severity:string; confidence:string; evidence?:{rule_id?:string; remediation?:string}};
+type Scan = {id:string; status:string; attempted:number; planned:number; error:string|null; modules:LabModule[]; custom_cases:unknown[]; retest_of:string|null};
+type Finding = {id:string; path:string; status_code:number; summary:string; module:LabModule; severity:string; confidence:string; review_state:string; review_note:string; evidence?:{rule_id?:string; remediation?:string}};
 const moduleLabels:Record<LabModule,string>={directories:'Directory discovery · 4 fixed paths',vhosts:'Virtual hosts · 3 control/candidate requests',api:'API fixture · 6 two-actor ownership checks',parameters:'Parameter signals · 6 harmless marker checks',custom:'Custom cases · bounded declarative GET checks',subdomains:'DNS fixture · 3 local control/candidate queries'};
 const moduleBudgets:Record<LabModule,number>={directories:4,vhosts:3,api:6,parameters:6,custom:0,subdomains:3};
 const terminal = new Set(['completed','cancelled','failed','timed_out','interrupted']);
@@ -22,7 +23,10 @@ export default function App() {
   const [scans, setScans] = useState<Scan[]>([]);
   const [selected, setSelected] = useState<Scan|null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
-  const [tab, setTab] = useState<'run'|'history'>('run');
+  const [tab, setTab] = useState<'run'|'history'|'report'>('run');
+  const [report,setReport]=useState<{summary:string;partial:boolean;limitations:string;totals:Record<string,unknown>}|null>(null);
+  const [snapshot,setSnapshot]=useState('');
+  const [comparison,setComparison]=useState('');
   const pendingKey = useRef<string|null>(null);
   const active = useRef(true);
   const inFlight = useRef(false);
@@ -37,7 +41,7 @@ export default function App() {
     return () => subscription.remove();
   }, []);
 
-  async function request(path:string, options:RequestInit = {}) {
+  async function request(path:string, options:RequestInit = {},format:'json'|'text'='json') {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
     try {
@@ -47,7 +51,7 @@ export default function App() {
         if (response.status === 401) {setConnected(false);throw new Error('Connection token was rejected.');}
         throw new Error(`API request failed (${response.status}). Check the backend and retry.`);
       }
-      return await response.json();
+      return format==='text'?await response.text():await response.json();
     } finally {clearTimeout(timer);}
   }
 
@@ -102,11 +106,23 @@ export default function App() {
     });
   }
 
+  async function openReport() {
+    if(!selected)throw new Error('Choose a run first.');
+    setReport(await request(`/v1/scans/${selected.id}/report.json`));setSnapshot('');setComparison('');setTab('report');
+  }
+  async function retest() {
+    if(!selected || !authorized)throw new Error('Confirm new authorization before this retest.');
+    if(!pendingKey.current)pendingKey.current=`mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const body={...buildLabRequest(authorized,selected.modules,selected.custom_cases),retest_of:selected.id};
+    const row:Scan=await request('/v1/scans',{method:'POST',headers:{'Idempotency-Key':pendingKey.current},body:JSON.stringify(body)});
+    pendingKey.current=null;setAuthorized(false);setComparison('');setReport(null);setTab('run');await refresh(row.id);
+  }
+
   return <SafeAreaView style={s.safe}><StatusBar style="light"/><ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
     <View style={s.brand}><View style={s.mark}/><Text style={s.brandName}>FUZZCORE</Text><Text style={s.tag}>LAB EDITION</Text></View>
     <Text style={s.title}>A clear view of{ '\n' }your test surface.</Text>
     <Text style={s.intro}>Controlled discovery. Real evidence. No vulnerability claims without review.</Text>
-    <View style={s.notice}><Text style={s.noticeTitle}>Authorized lab targets only</Text><Text style={s.body}>This build supports fixed-lab directory/vhost discovery and synthetic API ownership, harmless parameter signals and declarative custom cases. DNS discovery stays inside the local fixture. Report export is not available yet.</Text></View>
+    <View style={s.notice}><Text style={s.noticeTitle}>Authorized lab targets only</Text><Text style={s.body}>This build supports fixed-lab directory/vhost discovery and synthetic API ownership, harmless parameter signals and declarative custom cases. DNS discovery stays inside the local fixture. Reports and exports describe only these bounded fixture checks.</Text></View>
     {!connected ? <View style={s.card}>
       <Text style={s.heading}>Connect your backend</Text><Text style={s.body}>Your APK controls a separate server. The server must be running and reachable from this device.</Text>
       <Text style={s.label}>API ADDRESS</Text><TextInput style={s.input} value={base} onChangeText={setBase} placeholder="https://your-development-api" placeholderTextColor="#81909f" autoCapitalize="none" autoCorrect={false} keyboardType="url" accessibilityLabel="API address"/>
@@ -114,7 +130,7 @@ export default function App() {
       <Pressable disabled={busy} onPress={connect} style={[s.button,busy&&s.disabled]} accessibilityRole="button"><Text style={s.buttonText}>{busy?'Connecting…':'Connect to lab'}</Text></Pressable>
       <Text style={s.foot}>Token stored in device secure storage after connection. Web preview keeps it in memory only.</Text>
     </View> : <>
-      <View style={s.tabs}>{(['run','history'] as const).map(t=><Pressable key={t} onPress={()=>setTab(t)} style={[s.tab,tab===t&&s.tabOn]} accessibilityRole="tab" accessibilityState={{selected:tab===t}}><Text style={s.tabText}>{t==='run'?'Run a scan':'History'}</Text></Pressable>)}</View>
+      <View style={s.tabs}>{(['run','history','report'] as const).map(t=><Pressable key={t} onPress={()=>t==='report'?action(openReport):setTab(t)} style={[s.tab,tab===t&&s.tabOn]} accessibilityRole="tab" accessibilityState={{selected:tab===t}}><Text style={s.tabText}>{t==='run'?'Run a scan':t==='history'?'History':'Report'}</Text></Pressable>)}</View>
       {tab==='run' ? <View style={s.card}>
         <Text style={s.label}>APPROVED TARGET</Text><Text style={s.heading}>FuzzCore fixture lab</Text><Text style={s.body}>One fixture destination · 2 requests/sec maximum · no redirects</Text>
         {(['directories','vhosts','api','parameters','custom','subdomains'] as const).map(module => <View key={module} style={s.notice}><Text style={s.body}>{moduleLabels[module]}</Text><Switch value={modules.includes(module)} disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} accessibilityLabel={`Select ${module} module`} onValueChange={enabled=>{setModules(current=>enabled?[...current,module]:current.filter(m=>m!==module));setAuthorized(false);}}/></View>)}
@@ -127,9 +143,18 @@ export default function App() {
           {!terminal.has(selected.status) && <Pressable disabled={busy} style={s.secondary} onPress={()=>action(async()=>{await request(`/v1/scans/${selected.id}/cancel`,{method:'POST'});await refresh(selected.id);})} accessibilityRole="button"><Text style={s.link}>Cancel scan</Text></Pressable>}
           <Text style={s.heading}>Discoveries</Text>{findings.length===0?<Text style={s.body}>No resources recorded for this run yet.</Text>:findings.map(f=><View key={f.id} style={s.finding}><Text style={s.path}>{f.path} <Text style={s.code}>{f.status_code}</Text></Text><Text style={s.foot}>{f.module} · {f.severity} · {f.confidence} · {f.evidence?.rule_id || 'resource-status-v1'}</Text><Text style={s.body}>{f.summary}</Text>{!!f.evidence?.remediation && <Text style={s.body}>Fix: {f.evidence.remediation}</Text>}</View>)}
         </>}
-      </View> : <View style={s.card}><Text style={s.heading}>Recent runs</Text>{scans.length===0?<Text style={s.body}>No scans yet. Start a lab scan to see it here.</Text>:scans.map(row=><Pressable key={row.id} style={s.finding} onPress={()=>action(async()=>{await refresh(row.id);setTab('run');})} accessibilityRole="button"><Text style={s.path}>{row.status} · {row.attempted}/{row.planned}</Text><Text style={s.foot}>{row.id.slice(0,8)}</Text></Pressable>)}</View>}
+      </View> : tab==='history' ? <View style={s.card}><Text style={s.heading}>Recent runs</Text>{scans.length===0?<Text style={s.body}>No scans yet. Start a lab scan to see it here.</Text>:scans.map(row=><Pressable key={row.id} style={s.finding} onPress={()=>action(async()=>{await refresh(row.id);setTab('run');})} accessibilityRole="button"><Text style={s.path}>{row.status} · {row.attempted}/{row.planned}</Text><Text style={s.foot}>{row.id.slice(0,8)}</Text></Pressable>)}</View> : <View style={s.card}><Text style={s.heading}>Run report</Text>{!report?<Text style={s.body}>Select a run in History, then open Report.</Text>:<>
+        <Text style={s.body}>{report.summary}</Text><Text style={s.error}>{report.partial?'Partial or in-progress run. Results are incomplete.':'Completed bounded fixture run, not an exhaustive assessment.'}</Text><Text style={s.body}>{report.limitations}</Text>
+        <Text selectable style={s.foot}>{JSON.stringify(report.totals,null,2)}</Text>
+        <Pressable disabled={busy} style={s.button} onPress={()=>action(async()=>{if(!selected)return;const value=await request(`/v1/scans/${selected.id}/report.json`);await exportReport(selected.id,'json',JSON.stringify(value,null,2));})} accessibilityRole="button"><Text style={s.buttonText}>Export JSON</Text></Pressable>
+        <Pressable disabled={busy} style={s.secondary} onPress={()=>action(async()=>{if(!selected)return;const value=await request(`/v1/scans/${selected.id}/report.html`,{},'text');await exportReport(selected.id,'html',value);})} accessibilityRole="button"><Text style={s.link}>Export printable HTML</Text></Pressable>
+        <Pressable disabled={busy} style={s.secondary} onPress={()=>action(async()=>{if(!selected)return;const value=await request(`/v1/scans/${selected.id}/report-snapshots`,{method:'POST'});setSnapshot(value.id);})} accessibilityRole="button"><Text style={s.link}>Save immutable snapshot</Text></Pressable>{!!snapshot&&<Text selectable style={s.foot}>Saved snapshot: {snapshot}</Text>}
+        <Text style={s.heading}>Review findings</Text>{findings.map(f=><View key={f.id} style={s.finding}><Text style={s.path}>{f.path}</Text><Text style={s.body}>{f.review_state} · {f.severity} · {f.confidence}</Text>{(['open','acknowledged','retest_requested'] as const).map(state=><Pressable key={state} disabled={busy} style={s.secondary} accessibilityRole="button" onPress={()=>action(async()=>{if(!selected)return;await request(`/v1/scans/${selected.id}/findings/${f.id}/review`,{method:'PATCH',body:JSON.stringify({state})});await refresh(selected.id);await openReport();})}><Text style={s.link}>{state.replaceAll('_',' ')}</Text></Pressable>)}</View>)}
+        {!!selected&&terminal.has(selected.status)&&<><Text style={s.body}>After a manual fixture change, retest the same module/case snapshot. Confirm fresh authorization on Run a scan first. A missing result is not automatically fixed.</Text><Pressable disabled={busy||!authorized} style={[s.button,(!authorized||busy)&&s.disabled]} onPress={()=>action(retest)} accessibilityRole="button"><Text style={s.buttonText}>Retest same scope</Text></Pressable></>}
+        {!!selected?.retest_of&&terminal.has(selected.status)&&<Pressable disabled={busy} style={s.secondary} accessibilityRole="button" onPress={()=>action(async()=>{if(selected)setComparison(JSON.stringify(await request(`/v1/scans/${selected.id}/retest-comparison`),null,2));})}><Text style={s.link}>Compare linked retest</Text></Pressable>}{!!comparison&&<Text selectable style={s.foot}>{comparison}</Text>}
+      </>}</View>}
       <Pressable disabled={busy} onPress={()=>action(async()=>refresh(selected?.id))} style={s.secondary} accessibilityRole="button"><Text style={s.link}>Refresh status</Text></Pressable>
-      <Pressable onPress={()=>action(async()=>{setConnected(false);setAuthorized(false);pendingKey.current=null;setToken('');setSelected(null);setFindings([]);setScans([]);if(Platform.OS!=='web')await SecureStore.deleteItemAsync('apiToken');})} style={s.secondary} accessibilityRole="button"><Text style={s.muted}>Disconnect and remove token</Text></Pressable>
+      <Pressable onPress={()=>action(async()=>{setConnected(false);setAuthorized(false);pendingKey.current=null;setToken('');setSelected(null);setReport(null);setSnapshot('');setComparison('');setFindings([]);setScans([]);if(Platform.OS!=='web')await SecureStore.deleteItemAsync('apiToken');})} style={s.secondary} accessibilityRole="button"><Text style={s.muted}>Disconnect and remove token</Text></Pressable>
     </>}
     {!!error && <View style={s.errorBox} accessibilityRole="alert"><Text style={s.error}>{error}</Text></View>}
     <Text style={s.footer}>LAB / DEVELOPMENT BUILD{ '\n' }Finding a resource does not prove it is vulnerable.</Text>
