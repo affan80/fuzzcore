@@ -1,41 +1,57 @@
 name: Verify lab baseline
-on: [push, workflow_dispatch]
+on:
+  push:
+    branches: [dev, main]
+    paths: ['apps/**', 'services/**', 'infra/**', 'compose.yaml', '.github/workflows/**']
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  pr-target:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Contribution PRs must target dev
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: test "$BASE_BRANCH" = dev
   unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack reviewed source bundle
-        run: base64 -d fuzzcore-source.b64 > /tmp/source.zip && unzip -q /tmp/source.zip -d /tmp/source && cp -a /tmp/source/fuzzcore/. .
       - uses: actions/setup-python@v5
         with: {python-version: '3.10'}
-      - run: pip install -r services/api/requirements.txt
+      - run: pip install -r services/api/requirements-dev.txt
       - run: PYTHONPATH=services/api pytest services/api/tests -q
       - uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/mobile/package-lock.json}
-      - run: npm ci && npx tsc --noEmit && npx expo export --platform web
+      - run: npm ci && node --experimental-strip-types --test tests/*.test.mjs && npx tsc --noEmit && npx expo export --platform web
         working-directory: apps/mobile
   isolated-integration:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack reviewed source bundle
-        run: base64 -d fuzzcore-source.b64 > /tmp/source.zip && unzip -q /tmp/source.zip -d /tmp/source && cp -a /tmp/source/fuzzcore/. .
       - uses: actions/setup-python@v5
         with: {python-version: '3.10'}
       - run: python infra/ci_env.py
+      - name: Validate effective Compose configuration
+        run: docker compose config --quiet
       - run: docker compose up --build -d
       - run: python infra/smoke.py
+      - name: Container readiness diagnostics
+        if: always()
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --tail=160 api worker scanner db redis lab
+          curl --max-time 5 -v http://127.0.0.1:8000/health || true
       - if: always()
         run: docker compose down -v
   apk:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack reviewed source bundle
-        run: base64 -d fuzzcore-source.b64 > /tmp/source.zip && unzip -q /tmp/source.zip -d /tmp/source && cp -a /tmp/source/fuzzcore/. .
       - uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/mobile/package-lock.json}
       - uses: actions/setup-java@v4
