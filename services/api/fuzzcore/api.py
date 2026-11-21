@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from .core import Scan, Finding, EnqueueIntent, ReportSnapshot, database, utcnow, TERMINAL
 from .reports import finding_json,report,render_html
 from .outbox import dispatch_one
+from .progress import initial_progress, progress_for, settle_progress
 from .custom_cases import CustomCase, canonical, version
 
 
@@ -87,7 +88,7 @@ def create_app(sessions, enqueue, token):
                     raise HTTPException(422,'retest_requires_same_scope_and_cases')
             row = db.scalar(select(Scan).where(Scan.owner == owner, Scan.request_key == idempotency_key))
             if not row:
-                row = Scan(id=str(uuid.uuid4()), owner=owner, request_key=idempotency_key, retest_of=body.retest_of, authorization_confirmed_at=utcnow(), selected_modules=','.join(sorted(body.modules)), custom_cases=canonical([c.model_dump() for c in body.custom_cases]), case_version=version([c.model_dump() for c in body.custom_cases]) if body.custom_cases else None, planned=(4 if 'directories' in body.modules else 0)+(3 if 'vhosts' in body.modules else 0)+(6 if 'api' in body.modules else 0)+(6 if 'parameters' in body.modules else 0)+len(body.custom_cases)+(3 if 'subdomains' in body.modules else 0))
+                row = Scan(module_progress=json.dumps(initial_progress(sorted(body.modules),body.custom_cases)),id=str(uuid.uuid4()), owner=owner, request_key=idempotency_key, retest_of=body.retest_of, authorization_confirmed_at=utcnow(), selected_modules=','.join(sorted(body.modules)), custom_cases=canonical([c.model_dump() for c in body.custom_cases]), case_version=version([c.model_dump() for c in body.custom_cases]) if body.custom_cases else None, planned=(4 if 'directories' in body.modules else 0)+(3 if 'vhosts' in body.modules else 0)+(6 if 'api' in body.modules else 0)+(6 if 'parameters' in body.modules else 0)+len(body.custom_cases)+(3 if 'subdomains' in body.modules else 0))
                 db.add(row)
                 db.add(EnqueueIntent(scan_id=row.id))
                 try:
@@ -124,7 +125,7 @@ def create_app(sessions, enqueue, token):
                 row.status = 'cancelled'
             elif row.status == 'running':
                 row.status = 'cancelling'
-            row.updated_at = utcnow(); db.commit()
+            row.updated_at = utcnow(); settle_progress(row); db.commit()
             return serialize(row)
 
     @app.get('/v1/scans/{scan_id}/findings')
@@ -197,7 +198,7 @@ def create_app(sessions, enqueue, token):
 
 
 def serialize(row):
-    return {'modules':row.selected_modules.split(','),'custom_cases':json.loads(row.custom_cases),'case_version':row.case_version,'retest_of':row.retest_of, **{key: getattr(row, key) for key in ('id', 'status', 'attempted', 'planned', 'created_at', 'updated_at', 'error', 'target_id', 'scope_version', 'authorization_confirmed_at')}}
+    return {'module_progress':progress_for(row),'progress_available':bool(json.loads(row.module_progress)),'modules':row.selected_modules.split(','),'custom_cases':json.loads(row.custom_cases),'case_version':row.case_version,'retest_of':row.retest_of, **{key: getattr(row, key) for key in ('id', 'status', 'attempted', 'planned', 'created_at', 'updated_at', 'error', 'target_id', 'scope_version', 'authorization_confirmed_at')}}
 
 
 def production_app():
