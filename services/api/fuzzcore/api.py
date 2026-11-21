@@ -73,9 +73,13 @@ def create_app(sessions, enqueue, token):
             'profile': {'id': 'lab-small', 'max_attempts': 34,
                         'requests_per_second': 2, 'concurrency': 1},
             'directory_cases':{'upload-v1':{'requests':6,'cleanup_reserve':2,'mode':'fixed_benign_in_memory','default':False,'ttl_seconds':300},'canary-v1':{'requests':3,'mode':'synthetic_read_only','default':False}},
+            'saved_custom_cases':{'supported':True,'immutable':True,'max_versions':100,'list_limit':50,'max_cases_per_version':3},
             'custom_case_schema':{'version':'declarative-v2','methods':['GET','POST'],'post_paths':['/custom-disposable'],'response_header_names':['content-type','x-fixture-mode'],'max_body_marker_length':64,'max_cases':3},
             'target_mode': 'fixed_lab_only', 'authorization_required': True,
         }
+
+    from .saved_cases import attach_saved_cases
+    attach_saved_cases(app,sessions,auth)
 
     @app.get('/v1/targets')
     def targets(owner=Depends(auth)):
