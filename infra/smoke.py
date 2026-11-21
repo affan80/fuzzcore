@@ -112,6 +112,34 @@ assert detail['attempted']==detail['planned']==25
 names=[f for f in findings if f['module']=='subdomains']
 assert len(findings)==11 and len(names)==1 and names[0]['path']=='app.lab.invalid'
 assert names[0]['evidence']['records']==['192.0.2.10']
+# Authenticated exports and immutable snapshot reflect the real stored run.
+report=request('/v1/scans/'+scan['id']+'/report.json')
+assert report['totals']['findings']==11 and report['partial'] is False
+assert report['scan']['attempted']==25 and 'not a security certificate' in report['limitations']
+html_req=urllib.request.Request(base+'/v1/scans/'+scan['id']+'/report.html',headers={'Authorization':'Bearer '+values['FUZZCORE_TOKEN']})
+with urllib.request.urlopen(html_req,timeout=10) as response:
+    assert "default-src 'none'" in response.headers['Content-Security-Policy']
+    assert b'FuzzCore lab report' in response.read()
+snapshot_req=urllib.request.Request(base+'/v1/scans/'+scan['id']+'/report-snapshots',data=b'',method='POST',headers={'Authorization':'Bearer '+values['FUZZCORE_TOKEN']})
+with urllib.request.urlopen(snapshot_req,timeout=10) as response:snapshot=json.load(response)
+assert request('/v1/report-snapshots/'+snapshot['id'])['report']['totals']['findings']==11
+finding=report['findings'][0]
+review_req=urllib.request.Request(base+'/v1/scans/'+scan['id']+'/findings/'+finding['id']+'/review',data=b'{"state":"acknowledged"}',method='PATCH',headers={'Authorization':'Bearer '+values['FUZZCORE_TOKEN'],'Content-Type':'application/json'})
+with urllib.request.urlopen(review_req,timeout=10) as response:assert json.load(response)['review_state']=='acknowledged'
+assert all(f['review_state']=='open' for f in request('/v1/report-snapshots/'+snapshot['id'])['report']['findings'])
+# A smaller linked retest copies the original directory-only scope, with fresh consent.
+original_id=report['scan']['id']
+first_run=request('/v1/scans')[ -1 ]
+assert first_run['modules']==['directories']
+retest=request('/v1/scans',{'target_id':'local-lab','authorization_confirmed':True,'modules':['directories'],'retest_of':first_run['id']},key='ci-linked-retest-0007')
+for attempt in range(30):
+    value=request('/v1/scans/'+retest['id'])
+    if value['status']=='completed':break
+    time.sleep(1)
+else:raise RuntimeError('Linked retest timed out')
+comparison=request('/v1/scans/'+retest['id']+'/retest-comparison')
+assert len(comparison['still_observed'])==3 and comparison['not_observed']==[]
+assert 'No automatic fixed' in comparison['conclusion']
 # Network membership check: scanner has neither data network nor injected data credentials.
 container = subprocess.check_output(['docker','compose','ps','-q','scanner'],text=True).strip()
 config = json.loads(subprocess.check_output(['docker','inspect',container]))[0]
