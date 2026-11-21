@@ -104,7 +104,7 @@ def test_module_retry_cannot_change_scope_or_accept_unknown_modules(tmp_path):
     headers={'Idempotency-Key':'module-retry-001'}
     assert c.post('/v1/scans',json=body,headers=headers).status_code==202
     assert c.post('/v1/scans',json={**body,'modules':['directories']},headers=headers).status_code==409
-    for modules in [[],['vhosts','vhosts'],['parameters']]:
+    for modules in [[],['vhosts','vhosts'],['custom']]:
         assert c.post('/v1/scans',json={**body,'modules':modules},headers=headers).status_code==422
 
 

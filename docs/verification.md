@@ -16,14 +16,18 @@ Module selection is persisted with the scan. Directory-only runs plan four reque
 
 PR13 exact-head CI https://github.com/affan80/fuzzcore/actions/runs/44872880662 passed all four jobs, including real Docker combined-seven-request smoke and APK compilation. PR13 is merged to dev. Local loopback fixture tests use SQLite and threads, not Docker/RQ or Android.
 
-## API fixture slice, local verification pending its own CI
+## API fixture slice, green CI
 
-See `api-fixture-evidence.md`. Eleven failing regression cases preceded their fixes. The local full suite passes 53 backend tests and four mobile-policy tests, plus TypeScript and web export. A loopback UI run completes thirteen combined requests and shows scoped fixture ownership evidence with remediation. Only a known synthetic two-actor defect can receive fixture-confirmed severity. The secure counterpart produces no finding. Migration v6 preserves old severity/confidence defaults. The fresh Docker/API smoke and APK run must pass before container/build verification is claimed for this slice.
+See `api-fixture-evidence.md`. Eleven failing regression cases preceded their fixes. The local full suite passes 53 backend tests and four mobile-policy tests, plus TypeScript and web export. A loopback UI run completes thirteen combined requests and shows scoped fixture ownership evidence with remediation. Only a known synthetic two-actor defect can receive fixture-confirmed severity. The secure counterpart produces no finding. Migration v6 preserves old severity/confidence defaults. Exact-head run https://github.com/affan80/fuzzcore/actions/runs/44873694975 passed all four jobs, including the real Docker thirteen-request fixture run and APK compile. PR14 merge is separate from this evidence.
+
+## Parameter slice, local verification pending its own CI
+
+See `parameter-fixture-evidence.md`. Five backend and one mobile-policy regression failed first. The full local suite passes 58 backend tests, five mobile-policy tests, TypeScript and web export. Positive/secure loopback fixture tests and web UI completed nineteen total requests. Reflection/duplicate-value outputs stay informational signals, not injection/bypass proof. Docker nineteen-request smoke and APK compile must pass in the fresh PR run before merge.
 
 ## Still unverified or unfinished
 
 - Physical Android install, SecureStore, background/reconnect behavior and trusted phone-to-backend HTTPS. User computer OS and Android device details are still needed.
-- Broader API inventory/transmission assessment, parameter, custom and DNS modules; traversal/upload fixture scenarios; report/remediation/retest flow and full-app acceptance.
+- Broader API inventory/transmission assessment, custom and DNS modules; traversal/upload fixture scenarios; report/remediation/retest flow and full-app acceptance.
 - Module-specific progress UI beyond the current shared run counters.
 - All possible egress routes, compromise resistance and production deployment hardening.
 - Recovery of every RQ failure mode. Current recovery handles unsent intents and explicit stale interrupted work; it is not a full distributed scheduler.

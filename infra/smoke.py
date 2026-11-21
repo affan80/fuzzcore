@@ -69,6 +69,19 @@ api_findings = [f for f in findings if f['module']=='api']
 assert len(findings)==5 and len(api_findings)==1
 assert api_findings[0]['severity']=='high' and api_findings[0]['confidence']=='fixture-confirmed'
 assert api_findings[0]['evidence']['rule_id']=='fixture-object-ownership-v1'
+# Fourth run includes six harmless parameter-marker observations.
+scan = request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts','api','parameters']}, key='ci-parameters-0004')
+for attempt in range(80):
+    detail=request('/v1/scans/'+scan['id'])
+    if detail['status']=='completed':break
+    if detail['status'] in ('failed','timed_out'):raise RuntimeError('Parameter fixture failed')
+    time.sleep(1)
+else:raise RuntimeError('Parameter fixture timed out')
+findings=request('/v1/scans/'+scan['id']+'/findings')
+assert detail['attempted']==detail['planned']==19
+parameter_findings=[f for f in findings if f['module']=='parameters']
+assert len(findings)==7 and len(parameter_findings)==2
+assert all(f['severity']=='informational' and f['confidence']=='signal' for f in parameter_findings)
 # Network membership check: scanner has neither data network nor injected data credentials.
 container = subprocess.check_output(['docker','compose','ps','-q','scanner'],text=True).strip()
 config = json.loads(subprocess.check_output(['docker','inspect',container]))[0]

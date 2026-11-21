@@ -6,8 +6,8 @@ import { buildLabRequest, type LabModule } from './labPolicy';
 
 type Scan = {id:string; status:string; attempted:number; planned:number; error:string|null; modules:LabModule[]};
 type Finding = {id:string; path:string; status_code:number; summary:string; module:LabModule; severity:string; confidence:string; evidence?:{rule_id?:string; remediation?:string}};
-const moduleLabels:Record<LabModule,string>={directories:'Directory discovery · 4 fixed paths',vhosts:'Virtual hosts · 3 control/candidate requests',api:'API fixture · 6 two-actor ownership checks'};
-const moduleBudgets:Record<LabModule,number>={directories:4,vhosts:3,api:6};
+const moduleLabels:Record<LabModule,string>={directories:'Directory discovery · 4 fixed paths',vhosts:'Virtual hosts · 3 control/candidate requests',api:'API fixture · 6 two-actor ownership checks',parameters:'Parameter signals · 6 harmless marker checks'};
+const moduleBudgets:Record<LabModule,number>={directories:4,vhosts:3,api:6,parameters:6};
 const terminal = new Set(['completed','cancelled','failed','timed_out','interrupted']);
 
 export default function App() {
@@ -103,7 +103,7 @@ export default function App() {
     <View style={s.brand}><View style={s.mark}/><Text style={s.brandName}>FUZZCORE</Text><Text style={s.tag}>LAB EDITION</Text></View>
     <Text style={s.title}>A clear view of{ '\n' }your test surface.</Text>
     <Text style={s.intro}>Controlled discovery. Real evidence. No vulnerability claims without review.</Text>
-    <View style={s.notice}><Text style={s.noticeTitle}>Authorized lab targets only</Text><Text style={s.body}>This build supports fixed-lab directory/vhost discovery and a synthetic API ownership check. Parameter, custom and DNS modules and report export are not available yet.</Text></View>
+    <View style={s.notice}><Text style={s.noticeTitle}>Authorized lab targets only</Text><Text style={s.body}>This build supports fixed-lab directory/vhost discovery and synthetic API ownership and harmless parameter signals. Custom and DNS modules and report export are not available yet.</Text></View>
     {!connected ? <View style={s.card}>
       <Text style={s.heading}>Connect your backend</Text><Text style={s.body}>Your APK controls a separate server. The server must be running and reachable from this device.</Text>
       <Text style={s.label}>API ADDRESS</Text><TextInput style={s.input} value={base} onChangeText={setBase} placeholder="https://your-development-api" placeholderTextColor="#81909f" autoCapitalize="none" autoCorrect={false} keyboardType="url" accessibilityLabel="API address"/>
@@ -114,7 +114,7 @@ export default function App() {
       <View style={s.tabs}>{(['run','history'] as const).map(t=><Pressable key={t} onPress={()=>setTab(t)} style={[s.tab,tab===t&&s.tabOn]} accessibilityRole="tab" accessibilityState={{selected:tab===t}}><Text style={s.tabText}>{t==='run'?'Run a scan':'History'}</Text></Pressable>)}</View>
       {tab==='run' ? <View style={s.card}>
         <Text style={s.label}>APPROVED TARGET</Text><Text style={s.heading}>FuzzCore fixture lab</Text><Text style={s.body}>One fixture destination · 2 requests/sec maximum · no redirects</Text>
-        {(['directories','vhosts','api'] as const).map(module => <View key={module} style={s.notice}><Text style={s.body}>{moduleLabels[module]}</Text><Switch value={modules.includes(module)} disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} accessibilityLabel={`Select ${module} module`} onValueChange={enabled=>{setModules(current=>enabled?[...current,module]:current.filter(m=>m!==module));setAuthorized(false);}}/></View>)}
+        {(['directories','vhosts','api','parameters'] as const).map(module => <View key={module} style={s.notice}><Text style={s.body}>{moduleLabels[module]}</Text><Switch value={modules.includes(module)} disabled={busy || !!pendingKey.current || (!!selected && !terminal.has(selected.status))} accessibilityLabel={`Select ${module} module`} onValueChange={enabled=>{setModules(current=>enabled?[...current,module]:current.filter(m=>m!==module));setAuthorized(false);}}/></View>)}
         <Text style={s.foot}>{modules.reduce((total,module)=>total+moduleBudgets[module],0)} total requests across selected modules. Virtual-host differences are discoveries. API proof applies only to the deliberately seeded synthetic lab.</Text>
         <View style={s.notice}><Text style={s.body}>I am authorized to test this fixed fixture lab. This confirmation does not permit other targets.</Text><Switch value={authorized} onValueChange={setAuthorized} disabled={busy} accessibilityLabel="Confirm authorization for this lab scan" /></View>
         <Pressable disabled={!authorized || !modules.length || busy || (!!selected && !terminal.has(selected.status))} style={[s.button,(!authorized || !modules.length || busy || (!!selected && !terminal.has(selected.status)))&&s.disabled]} onPress={start} accessibilityRole="button"><Text style={s.buttonText}>{busy?'Working…':'Start lab scan'}</Text></Pressable>

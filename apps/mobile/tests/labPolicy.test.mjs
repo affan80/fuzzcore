@@ -25,3 +25,8 @@ test('API fixture module is a bounded supported choice', () => {
   assert.deepEqual(buildLabRequest(true, ['api']).modules, ['api']);
   assert.deepEqual(buildLabRequest(true, ['directories','api','vhosts']).modules, ['api','directories','vhosts']);
 });
+
+test('parameter signals stay inside the fixed fixture module list', () => {
+  assert.deepEqual(buildLabRequest(true,['parameters']).modules,['parameters']);
+  assert.throws(()=>buildLabRequest(true,['custom']),/module/);
+});
