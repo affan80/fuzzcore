@@ -94,3 +94,7 @@ Shared validated filters apply to findings, JSON/HTML exports and new immutable 
 ### Explicit curated API inventory
 
 Opt-in immutable `inventory-v1` adds4 read-only fixed lab requests after the existing6 API ownership checks: randomized missing control and named public/protected/hidden routes. Header/transport facts are informational, not production weakness claims. No arbitrary schema import or redirects. Defaults never expand. All current options reserve38/use36 maximum requests with2 unused cleanup reserves. See [API inventory evidence](api-inventory-evidence.md).
+
+### DNS response boundaries
+
+DNS questions explicitly clear recursion-desired. Mismatched/truncated envelopes fail closed; IN/A records require the exact requested name and an answer without aliases. No alias target is retained or followed. Stored flag booleans describe only the isolated fixture; they do not assess real recursion exposure, DNSSEC or takeover risk. The three-query budget and fixed destination stay unchanged.
