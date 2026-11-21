@@ -12,3 +12,11 @@ test('confirmed requests contain only the fixed approved lab and supported modul
     modules: ['directories'], authorization_confirmed: true,
   });
 });
+
+test('confirmed module choices are explicit, unique and limited to fixture implementations', () => {
+  assert.deepEqual(buildLabRequest(true, ['vhosts']).modules, ['vhosts']);
+  assert.deepEqual(buildLabRequest(true, ['directories','vhosts']).modules, ['directories','vhosts']);
+  for (const modules of [[],['subdomains'],['vhosts','vhosts']]) {
+    assert.throws(() => buildLabRequest(true, modules), /module/);
+  }
+});
