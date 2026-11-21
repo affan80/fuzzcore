@@ -61,8 +61,10 @@ The first APK was compiled and its package/signing metadata inspected. Native in
 
 The scanner receives no DB, Redis or user-token credentials and accepts only four fixture paths. No redirects or response bodies are followed/read. Findings are informational discoveries, not confirmed vulnerabilities.
 
-Remaining design work includes the other discovery modules, rule-specific fixture evidence, report/retest UI, broader recovery/security regressions, trusted device connection and final demo. No green badge establishes complete isolation or production readiness.
+Remaining design work includes broader directory/API/parameter/custom fixture scenarios, richer filtering and remediation/retest workflow, broader recovery/security regressions, trusted device connection and final demo. All six bounded module categories and basic report/retest UI exist. No green badge establishes complete isolation or production readiness.
 
 Stopping with `docker compose down -v` intentionally deletes demo history. It is a reset, not a safe recovery operation.
 
 Authenticated JSON/printable HTML reports, immutable report snapshots, review states and same-scope linked retests are implemented. Native export uses a user-controlled share sheet. Device behavior remains unverified. See `docs/report-retest-evidence.md` for boundaries and tests.
+
+Per-module progress records attempted requests separately from completed responses. Failed, cancelled and interrupted runs never mark later modules complete. Historic detailed progress is unavailable rather than fabricated. See [progress evidence](docs/module-progress-evidence.md).

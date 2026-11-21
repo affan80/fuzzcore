@@ -10,6 +10,8 @@ import httpx
 from sqlalchemy import create_engine, Column, String, Integer, Text, select, UniqueConstraint, Index, text, update
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+from .progress import advance_progress, settle_progress, initial_progress, fail_module
+
 Base = declarative_base()
 TERMINAL = {'completed', 'cancelled', 'failed', 'timed_out', 'interrupted'}
 PATHS = ('/', '/health', '/api/status', '/missing-control-7f23')
@@ -32,6 +34,7 @@ class Scan(Base):
     retest_of = Column(String,nullable=True)
     selected_modules = Column(String, nullable=False, default='directories')
     status = Column(String, nullable=False, default='queued')
+    module_progress = Column(Text, nullable=False, default='{}')
     attempted = Column(Integer, nullable=False, default=0)
     planned = Column(Integer, nullable=False, default=len(PATHS))
     error = Column(String, nullable=True)
@@ -111,6 +114,10 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
         modules = row.selected_modules.split(',')
         custom_cases = json.loads(row.custom_cases)
         case_version = row.case_version
+        # Legacy queued jobs have no fine-grained history. Start tracking only
+        # once this worker owns a fresh, unattempted execution.
+        if not json.loads(row.module_progress) and row.attempted==0:
+            row.module_progress=json.dumps(initial_progress(modules,custom_cases));db.commit()
     from .vhosts import CASES, discover
     plan = ([('directories', path) for path in PATHS] if 'directories' in modules else [])
     plan += ([('vhosts', case) for case in CASES] if 'vhosts' in modules else [])
@@ -132,14 +139,14 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
             with sessions() as db:
                 row = db.get(Scan, scan_id)
                 if row.status == 'cancelling':
-                    row.status = 'cancelled'; row.updated_at = utcnow(); db.commit(); return
+                    row.status = 'cancelled'; row.updated_at = utcnow(); settle_progress(row); db.commit(); return
                 if row.status != 'running':
                     return
                 if row.attempted >= row.planned or row.attempted >= 25:
                     raise ValueError('Request budget exhausted')
                 if clock() - started > 300:
-                    row.status = 'timed_out'; row.updated_at = utcnow(); db.commit(); return
-                row.attempted += 1; row.updated_at = utcnow(); db.commit()
+                    row.status = 'timed_out'; row.updated_at = utcnow(); settle_progress(row); db.commit(); return
+                row.attempted += 1; advance_progress(row,module); row.updated_at = utcnow(); db.commit()
             result = vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else custom_probe(path) if module == 'custom' else dns_probe(path) if module == 'subdomains' else None
             status = (200 if result['rcode'] in (0,3) else 502) if module=='subdomains' else result['status_code'] if result is not None else probe(path)
             if module == 'vhosts':
@@ -153,6 +160,7 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
             with sessions() as db:
                 row = db.get(Scan, scan_id)
                 row.updated_at = utcnow()
+                advance_progress(row,module,completed=True)
                 if module == 'directories' and 200 <= status < 300:
                     db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=path,
                                    status_code=status, summary='Lab resource discovered; not a vulnerability.'))
@@ -188,19 +196,19 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                             summary='Local fixture DNS record discovered; no HTTP follow-up or vulnerability claim.',
                             evidence=json.dumps(found['evidence'])))
                 if status == 429:
-                    row.status = 'failed'; row.error = 'target_rate_limited'; db.commit(); return
+                    row.status = 'failed'; row.error = 'target_rate_limited'; fail_module(row,module); settle_progress(row); db.commit(); return
                 db.commit()
             pause(0.5)  # Concurrency one and at most two fixture requests per second.
         with sessions() as db:
             row = db.get(Scan, scan_id)
             row.status = 'cancelled' if row.status == 'cancelling' else 'completed'
-            row.updated_at = utcnow(); db.commit()
+            row.updated_at = utcnow(); settle_progress(row); db.commit()
     except Exception:
         with sessions() as db:
             row = db.get(Scan, scan_id)
             row.status = 'cancelled' if row.status == 'cancelling' else 'failed'
             row.error = None if row.status == 'cancelled' else 'probe_failed'
-            row.updated_at = utcnow(); db.commit()
+            row.updated_at = utcnow(); settle_progress(row); db.commit()
 
 
 def http_probe(client):

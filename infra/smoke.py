@@ -109,6 +109,9 @@ for attempt in range(100):
 else:raise RuntimeError('DNS fixture timed out')
 findings=request('/v1/scans/'+scan['id']+'/findings')
 assert detail['attempted']==detail['planned']==25
+assert set(detail['module_progress'])=={'directories','vhosts','api','parameters','custom','subdomains'}
+assert all(p['state']=='completed' and p['attempted']==p['completed']==p['planned'] for p in detail['module_progress'].values())
+assert sum(p['completed'] for p in detail['module_progress'].values())==25
 names=[f for f in findings if f['module']=='subdomains']
 assert len(findings)==11 and len(names)==1 and names[0]['path']=='app.lab.invalid'
 assert names[0]['evidence']['records']==['192.0.2.10']

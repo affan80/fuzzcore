@@ -3,9 +3,10 @@ import { AppState, FlatList, Platform, Pressable, SafeAreaView, ScrollView, Styl
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import { exportReport } from './exportReport';
+import {moduleProgressText,type ModuleProgress} from './moduleProgress';
 import { buildLabRequest, type LabModule } from './labPolicy';
 
-type Scan = {id:string; status:string; attempted:number; planned:number; error:string|null; modules:LabModule[]; custom_cases:unknown[]; retest_of:string|null};
+type Scan = {module_progress:Partial<Record<LabModule,ModuleProgress>>;progress_available:boolean;id:string; status:string; attempted:number; planned:number; error:string|null; modules:LabModule[]; custom_cases:unknown[]; retest_of:string|null};
 type Finding = {id:string; path:string; status_code:number; summary:string; module:LabModule; severity:string; confidence:string; review_state:string; review_note:string; evidence?:{rule_id?:string; remediation?:string}};
 const moduleLabels:Record<LabModule,string>={directories:'Directory discovery · 4 fixed paths',vhosts:'Virtual hosts · 3 control/candidate requests',api:'API fixture · 6 two-actor ownership checks',parameters:'Parameter signals · 6 harmless marker checks',custom:'Custom cases · bounded declarative GET checks',subdomains:'DNS fixture · 3 local control/candidate queries'};
 const moduleBudgets:Record<LabModule,number>={directories:4,vhosts:3,api:6,parameters:6,custom:0,subdomains:3};
@@ -139,6 +140,7 @@ export default function App() {
         <View style={s.notice}><Text style={s.body}>I am authorized to test this fixed fixture lab. This confirmation does not permit other targets.</Text><Switch value={authorized} onValueChange={setAuthorized} disabled={busy} accessibilityLabel="Confirm authorization for this lab scan" /></View>
         <Pressable disabled={!authorized || !modules.length || busy || (!!selected && !terminal.has(selected.status))} style={[s.button,(!authorized || !modules.length || busy || (!!selected && !terminal.has(selected.status)))&&s.disabled]} onPress={start} accessibilityRole="button"><Text style={s.buttonText}>{busy?'Working…':'Start lab scan'}</Text></Pressable>
         {selected && <><View style={s.divider}/><Text style={s.label}>LATEST RUN</Text><Text style={s.status}>{selected.status.replace('_',' ')}</Text><Text style={s.body}>{selected.attempted} / {selected.planned} checks attempted</Text>
+          <Text style={s.heading}>Module progress</Text><Text style={s.foot}>Completed means a check returned a response, not that its target is safe. Attempted includes a request still in flight or failed.</Text>{selected.progress_available?selected.modules.map(module=><View key={module} style={s.finding} accessibilityLabel={`${module} progress`}><Text style={s.path}>{module.replaceAll('_',' ')}</Text><Text style={s.body}>{moduleProgressText(selected.module_progress[module])}</Text></View>):<Text style={s.body}>{moduleProgressText(undefined)}</Text>}
           {!!selected.error && <Text style={s.error}>{selected.error.replaceAll('_',' ')}</Text>}
           {!terminal.has(selected.status) && <Pressable disabled={busy} style={s.secondary} onPress={()=>action(async()=>{await request(`/v1/scans/${selected.id}/cancel`,{method:'POST'});await refresh(selected.id);})} accessibilityRole="button"><Text style={s.link}>Cancel scan</Text></Pressable>}
           <Text style={s.heading}>Discoveries</Text>{findings.length===0?<Text style={s.body}>No resources recorded for this run yet.</Text>:findings.map(f=><View key={f.id} style={s.finding}><Text style={s.path}>{f.path} <Text style={s.code}>{f.status_code}</Text></Text><Text style={s.foot}>{f.module} · {f.severity} · {f.confidence} · {f.evidence?.rule_id || 'resource-status-v1'}</Text><Text style={s.body}>{f.summary}</Text>{!!f.evidence?.remediation && <Text style={s.body}>Fix: {f.evidence.remediation}</Text>}</View>)}

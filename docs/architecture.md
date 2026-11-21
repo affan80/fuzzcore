@@ -49,7 +49,7 @@ Schema migration ledger versions adopt the legacy schema, add active-run/outbox 
 
 Modules will accept typed, server-validated inputs and share one global budget. Discovery uses default/missing/wildcard controls. API ownership checks use six known two-actor fixture scenarios with secure and deliberately vulnerable counterparts. Only their synthetic proof can be fixture-confirmed. Parameter reflection and duplicate-value observations remain informational signals, not proof of XSS/SQL injection or parser-bypass defects. Custom cases are bounded JSON GET expectations on three fixture paths, never code. Up to three normalized immutable cases/version are stored with each run. Version 7 adds case snapshot/version fields. DNS discoveries do not authorize new HTTP targets. Reporting is authenticated JSON and escaped printable HTML with restrictive CSP, immutable snapshots and review states. Linked retests require fresh consent and identical modules/cases; comparison never automatically declares fixed. Remediation is rule-linked advice, manual fixture changes and linked retest, not automatic deployment.
 
-Planned additions: per-module records/progress, custom-case versions, richer report filtering and declared-fixed/retest workflow; capability flags and schema versions evolve with tests. Keep one user/worker/stack rather than adding SaaS/scaling infrastructure.
+Per-module progress and immutable custom-case versions are implemented. Planned additions: richer report filtering and declared-fixed/retest workflow; capability flags and schema versions evolve with tests. Keep one user/worker/stack rather than adding SaaS/scaling infrastructure.
 
 ## Three-day sequence
 
@@ -58,3 +58,7 @@ Planned additions: per-module records/progress, custom-case versions, richer rep
 3. Day 3: reports/remediation/retest, regression and clean startup, actual Android install/reconnect acceptance, final APK/source/demo and known limitations.
 
 The Nov 23 target is tight after the design pause. A working APK build is not proof of Android device behavior or a complete app. Trusted phone-to-backend HTTPS, final device testing and other modules remain open. No paid hosting, public tunnel, iOS or Play Store release is assumed.
+
+## Durable module progress
+
+Migration10 adds per-module state/planned/attempted/completed checkpoints to each new scan. Request starts and returned responses are committed separately. Terminal runs preserve completed modules and mark never-started modules not_run. Legacy detailed progress is unavailable rather than inferred from aggregate counts. Scan detail, history and reports expose the same state. This does not change the request budget or fixture-only authority. See `module-progress-evidence.md`.

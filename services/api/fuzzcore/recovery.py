@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from .core import Scan, database, utcnow
 from .outbox import retry_pending
+from .progress import settle_progress
 
 
 def recover_stale(sessions, cutoff, *, worker_stopped):
@@ -16,6 +17,7 @@ def recover_stale(sessions, cutoff, *, worker_stopped):
             row.status = 'cancelled' if row.status == 'cancelling' else 'interrupted'
             row.error = None if row.status == 'cancelled' else 'worker_interrupted'
             row.updated_at = utcnow()
+            settle_progress(row)
             count += 1
         db.commit()
     return count
