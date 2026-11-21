@@ -1,27 +1,28 @@
 # Verification status
 
-Last updated during Day 1 on 21 Nov 2026. See `day1-evidence.md` for test-first change details and recovery procedure.
+Updated 21 Nov 2026. A compiled APK, working web preview and physical Android acceptance are separate gates.
 
-## Proven in the published ingress baseline
+## Verified foundation on dev
 
-Actions run https://github.com/affan80/fuzzcore/actions/runs/44868493037 has passed unit/mobile checks, the dev PR-target check and real Docker integration. The Docker smoke starts Postgres, Redis/RQ, API, worker, scanner and fixture; completes four fixed checks with three informational discoveries; and inspects scanner networks/credential absence. The APK job also passed, so this ingress baseline run is fully green. This does not verify the newer lifecycle slice until its separate run completes.
+- PR11 postmerge run https://github.com/affan80/fuzzcore/actions/runs/44871310736 passed backend/mobile checks, real Docker/Postgres/Redis/RQ/scanner/fixture integration and APK compilation.
+- PR12 exact-head run https://github.com/affan80/fuzzcore/actions/runs/44871499996 passed all four checks before merge into dev. It adds test-first legacy-queue consent protection; 32 backend tests passed locally. Migration v4 does not invent authorization or replay unknown-consent work.
+- The lifecycle APK artifact https://github.com/affan80/fuzzcore/actions/runs/44869436224/artifacts/14693666971 was retrieved and its provider digest matched. Package dev.fuzzcore.lab, FuzzCore Lab 1.0.0, 66,584,893 bytes, minSdk24 metadata, APK v2 Android Debug signing. This is internal-test signing, not production or Play Store signing.
 
-The first APK in run https://github.com/affan80/fuzzcore/actions/runs/44772454822 was retrieved and inspected: dev.fuzzcore.lab / FuzzCore Lab v1.0.0, 66,584,113 bytes, minSdk24 metadata, APK v2 Android Debug signing. ZIP digest matched the provider. This is not production signing or verified Android-version compatibility.
+## Virtual-host slice, local verification pending its own CI
 
-## New lifecycle slice, local only until its own CI completes
+Seven new backend tests failed before implementation. The full backend suite now passes 41 tests, including additional scope-retry and shared-rate-limit regressions. Three Node mobile-policy tests, TypeScript and web export pass. The vhost adapter compares default and freshly randomized control-host signatures with a seeded fixture host. Identical responses and redirects are not discoveries. Destination stays pinned to the fixed fixture. Response evidence is status, length and SHA-256 only, with a 16 KiB body-processing cap. No raw body is persisted.
 
-30 Python tests pass, including authorization, fixed scope, idempotency, one-active-run index, forced duplicate-worker claim race, queue retry, migrations and legacy history preservation. Two Node mobile policy tests pass. TypeScript and web export pass.
+Module selection is persisted with the scan. Directory-only runs plan four requests; vhost-only three; combined runs seven under one deadline, cancellation checkpoints and request counter. The same idempotency key cannot silently change modules. Only directories and vhosts are advertised. Other surfaces remain unavailable.
 
-Web UI integration uses a real loopback HTTP lab plus a SQLite/threaded test adapter. It verifies explicit authorization before start, four checks/three discoveries, reset confirmation and history. Views were inspected at 320/390/1280 pixels with no observed page errors. This is not native Android or Docker/RQ evidence.
-
-The lifecycle source's updated real-Docker smoke additionally checks scanner rejection of DB/Redis service connections. That assertion must pass in its fresh CI run before it is counted as verified.
+The updated Docker smoke must pass against this slice before its container integration is counted as verified. Local loopback fixture tests use SQLite and threads, not Docker/RQ or Android.
 
 ## Still unverified or unfinished
 
-- Physical Android install, SecureStore, background/reconnect behavior and trusted phone-to-backend HTTPS.
-- Remaining module fixtures and implementations, report/retest flow and full app acceptance.
+- Physical Android install, SecureStore, background/reconnect behavior and trusted phone-to-backend HTTPS. User computer OS and Android device details are still needed.
+- API, parameter, custom and DNS modules; traversal/upload fixture scenarios; report/remediation/retest flow and full-app acceptance.
+- Module-specific progress UI beyond the current shared run counters.
 - All possible egress routes, compromise resistance and production deployment hardening.
 - Recovery of every RQ failure mode. Current recovery handles unsent intents and explicit stale interrupted work; it is not a full distributed scheduler.
 - Final dependency advisory review, production signing and clean-machine submission rehearsal.
 
-A discovered path is not a vulnerability. An empty result set is not a security certificate. No Day 1 exit or full-app completion is claimed while device and scope gates remain open.
+A discovered path or host is not a vulnerability. An empty result set is not a security certificate. No full-app or native-device completion is claimed.

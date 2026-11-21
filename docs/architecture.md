@@ -4,7 +4,7 @@
 
 React Native Android APK controls a separate server. The full design covers preparation, directories/files, virtual hosts, APIs, parameters, declarative custom cases, subdomains, reporting and remediation/retest. It is a bounded authorized-lab application, not a public scanning service. Explicit authorization confirmation does not prove third-party ownership.
 
-The first implementation supports only four fixed resource paths against one bundled lab. Future modules remain unavailable in `/v1/capabilities` until their positive and negative fixture tests pass. No fake results, automatic exploitation, RCE, credential attacks, arbitrary scripts or auto-deployed fixes.
+The implementation supports four fixed resource paths and a three-request vhost comparison against one bundled lab. Future modules remain unavailable in `/v1/capabilities` until their positive and negative fixture tests pass. No fake results, automatic exploitation, RCE, credential attacks, arbitrary scripts or auto-deployed fixes.
 
 ## Flow
 
@@ -16,7 +16,7 @@ API owns validation, identity, ownership, scope and budgets. Postgres is the sou
 
 - API: data plus a separate ingress bridge. Only host loopback `127.0.0.1:8000` is published.
 - Worker supervisor: internal data/control networks, DB/Redis credentials.
-- Scanner gateway: internal control/lab networks only, no DB/Redis/user-token credentials. Four fixed paths, no redirects, no response-body retention.
+- Scanner gateway: internal control/lab networks only, no DB/Redis/user-token credentials. Four fixed paths plus allowlisted default/control/seeded vhost cases, no redirects. Vhost bodies are hashed within a 16 KiB processing limit and discarded.
 - DB/Redis: data only, no published ports.
 - Web fixture: lab only. A DNS fixture is planned for the subdomain module.
 
@@ -33,23 +33,23 @@ All application containers run non-root with dropped capabilities. No Docker soc
 - POST /v1/scans/{id}/cancel
 - GET /v1/scans/{id}/findings
 
-All except liveness require bearer authentication. Scan creation accepts only `local-lab`, `lab-small`, the directory module and explicit boolean confirmation. Unknown fields and modules fail validation. API response identifiers are `id`, consistently used by the app.
+All except liveness require bearer authentication. Scan creation accepts only `local-lab`, `lab-small`, directory/vhost module selection and explicit boolean confirmation. Unknown fields and modules fail validation. API response identifiers are `id`, consistently used by the app.
 
 ## Persistence and lifecycle
 
-Scans store owner, idempotency key, status, counters, timestamps, safe error, fixed target/scope version and authorization-confirmation time. Findings store bounded informational observations. An enqueue intent is saved in the same transaction as the scan.
+Scans store owner, idempotency key, status, counters, timestamps, safe error, fixed target/scope version and authorization-confirmation time. Scans also store the selected module snapshot and corresponding total request budget. Findings store their module and bounded informational evidence, including vhost control signatures. An enqueue intent is saved in the same transaction as the scan.
 
 Unique(owner, idempotency key) gives retry stability. A partial unique index on active states gives one active run per owner across API processes. Atomic queued→running update gives one worker claim even with duplicate deliveries. The outbox is at-least-once dispatch with stable RQ job IDs, not exactly-once messaging.
 
 States currently used: queued, running, cancelling, cancelled, completed, failed, timed_out and interrupted. Queued cancellation is immediate; running cancellation stops new traffic at the next bounded checkpoint. Partial findings remain available. Broader per-module/partial status is planned with the additional modules.
 
-Schema migration ledger versions adopt the legacy schema, add active-run/outbox persistence, and add scope confirmation without inventing past authorization. Upgrades are forward-only and preserve history. Legacy conflicting active runs fail visibly for operator review. A stopped-worker recovery command marks stale work interrupted and retries unsent queue intents. It never blindly resumes interrupted scans.
+Schema migration ledger versions adopt the legacy schema, add active-run/outbox persistence, and add scope confirmation without inventing past authorization. Version 4 interrupts unknown-consent queued legacy work; version 5 adds module selection and structured evidence. Upgrades are forward-only and preserve history. Legacy conflicting active runs fail visibly for operator review. A stopped-worker recovery command marks stale work interrupted and retries unsent queue intents. It never blindly resumes interrupted scans.
 
 ## Remaining full-design contracts
 
 Modules will accept typed, server-validated inputs and share one global budget. Discovery uses default/missing/wildcard controls. API authz checks need known two-user fixture scenarios. Parameter reflection/errors remain signals, not proof of XSS/SQL injection. Custom cases are bounded JSON, never code. DNS discoveries do not authorize new HTTP targets. Reporting is authenticated JSON and escaped printable HTML. Remediation is rule-linked advice, manual fixture changes and linked retest, not automatic deployment.
 
-Planned additions: module records/progress, custom-case versions, report snapshots, finding review and retest links; capability flags and schema versions evolve with tests. Keep one user/worker/stack rather than adding SaaS/scaling infrastructure.
+Planned additions: per-module records/progress, custom-case versions, report snapshots, finding review and retest links; capability flags and schema versions evolve with tests. Keep one user/worker/stack rather than adding SaaS/scaling infrastructure.
 
 ## Three-day sequence
 

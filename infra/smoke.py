@@ -8,9 +8,9 @@ from pathlib import Path
 values = dict(line.split('=', 1) for line in Path('.env').read_text().splitlines())
 base = 'http://127.0.0.1:8000'
 
-def request(path, body=None):
+def request(path, body=None, key='ci-fixture-0001'): 
     req = urllib.request.Request(base + path, data=json.dumps(body).encode() if body else None,
-        headers={'Authorization':'Bearer ' + values['FUZZCORE_TOKEN'], 'Idempotency-Key':'ci-fixture-0001', 'Content-Type':'application/json'})
+        headers={'Authorization':'Bearer ' + values['FUZZCORE_TOKEN'], 'Idempotency-Key':key, 'Content-Type':'application/json'})
     with urllib.request.urlopen(req, timeout=10) as response:
         return json.load(response)
 
@@ -32,6 +32,28 @@ else:
     raise RuntimeError('Fixture did not finish')
 findings = request('/v1/scans/' + scan['id'] + '/findings')
 assert len(findings) == 3 and detail['attempted'] == 4
+# The same key cannot change its authorized module snapshot.
+from urllib.error import HTTPError
+try:
+    request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['vhosts']})
+except HTTPError as error:
+    assert error.code == 409
+else:
+    raise AssertionError('Idempotency scope changed silently')
+scan = request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts']}, key='ci-vhosts-0002')
+for attempt in range(40):
+    detail = request('/v1/scans/' + scan['id'])
+    if detail['status'] == 'completed': break
+    if detail['status'] in ('failed','timed_out'): raise RuntimeError('Combined fixture scan failed')
+    time.sleep(1)
+else:
+    raise RuntimeError('Combined fixture did not finish')
+findings = request('/v1/scans/' + scan['id'] + '/findings')
+assert detail['attempted'] == detail['planned'] == 7
+vhosts = [f for f in findings if f['module']=='vhosts']
+assert len(findings)==4 and len(vhosts)==1 and vhosts[0]['path']=='admin.lab.invalid'
+assert vhosts[0]['evidence']['rule_id']=='vhost-difference-v1'
+assert set(vhosts[0]['evidence']['baseline'])=={'default','control','seeded'}
 # Network membership check: scanner has neither data network nor injected data credentials.
 container = subprocess.check_output(['docker','compose','ps','-q','scanner'],text=True).strip()
 config = json.loads(subprocess.check_output(['docker','inspect',container]))[0]
@@ -50,4 +72,4 @@ for host, port in [('db',5432), ('redis',6379)]:
 print('Scanner cannot reach data services')
 '''
 subprocess.run(['docker','compose','exec','-T','scanner','python','-c',probe], check=True)
-print('Real fixture run passed: 4 checks, 3 informational discoveries; scanner network membership checked.')
+print('Real fixture run passed: directory-only 4/3 and combined 7/4 fixture checks/discoveries; scanner network membership checked.')

@@ -1,8 +1,11 @@
 // A UI guard, not a replacement for the server's scope and identity checks.
-export function buildLabRequest(confirmed: boolean) {
+export type LabModule = 'directories' | 'vhosts';
+export function buildLabRequest(confirmed: boolean, modules: readonly string[] = ['directories']) {
   if (confirmed !== true) throw new Error('Confirm you are authorized to test this fixed lab.');
+  if (!modules.length || new Set(modules).size !== modules.length || modules.some(m => !['directories','vhosts'].includes(m)))
+    throw new Error('Choose supported fixture modules once each.');
   return {
     target_id: 'local-lab', profile_id: 'lab-small',
-    modules: ['directories'], authorization_confirmed: true,
+    modules: [...modules].sort(), authorization_confirmed: true,
   };
 }

@@ -8,7 +8,7 @@ def upgrade(engine, metadata, active_index):
     with engine.begin() as connection:
         connection.execute(text('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)'))
         version = connection.execute(text('SELECT COALESCE(MAX(version), 0) FROM schema_migrations')).scalar_one()
-        if version > 4:
+        if version > 5:
             raise RuntimeError('Database schema is newer than this application')
         if version < 1:
             metadata.create_all(connection)
@@ -43,3 +43,13 @@ def upgrade(engine, metadata, active_index):
                 "WHERE s.status='queued' AND s.authorization_confirmed_at IS NOT NULL "
                 "AND NOT EXISTS (SELECT 1 FROM enqueue_intents e WHERE e.scan_id=s.id)"))
             connection.execute(text('INSERT INTO schema_migrations (version) VALUES (4)'))
+
+        if version < 5:
+            scan_columns = {c['name'] for c in inspect(connection).get_columns('scans')}
+            if 'selected_modules' not in scan_columns:
+                connection.execute(text("ALTER TABLE scans ADD COLUMN selected_modules VARCHAR NOT NULL DEFAULT 'directories'"))
+            finding_columns = {c['name'] for c in inspect(connection).get_columns('findings')}
+            for name, definition in {'module':"VARCHAR NOT NULL DEFAULT 'directories'", 'evidence':"TEXT NOT NULL DEFAULT '{}'"}.items():
+                if name not in finding_columns:
+                    connection.execute(text(f'ALTER TABLE findings ADD COLUMN {name} {definition}'))
+            connection.execute(text('INSERT INTO schema_migrations (version) VALUES (5)'))

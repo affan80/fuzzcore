@@ -5,6 +5,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         found = self.path in ('/', '/health', '/api/status')
         body = b'{"fixture":true}' if found else b'not found'
+        if self.headers.get('Host') == 'admin.lab.invalid' and self.path == '/':
+            body = b'{"fixture":true,"vhost":"admin"}'
         self.send_response(200 if found else 404)
         self.send_header('Content-Type', 'application/json' if found else 'text/plain')
         self.send_header('Content-Length', str(len(body)))
