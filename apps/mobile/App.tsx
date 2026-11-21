@@ -8,7 +8,7 @@ import { buildLabRequest, DISPOSABLE_POST_EXAMPLE, type LabModule } from './labP
 
 type Scan = {module_progress:Partial<Record<LabModule,ModuleProgress>>;progress_available:boolean;id:string; status:string; attempted:number; planned:number; error:string|null; modules:LabModule[]; custom_cases:unknown[]; retest_of:string|null};
 type Finding = {id:string; path:string; status_code:number; summary:string; module:LabModule; severity:string; confidence:string; review_state:string; review_note:string; evidence?:{rule_id?:string; remediation?:string}};
-const moduleLabels:Record<LabModule,string>={directories:'Directory discovery · 4 fixed paths',vhosts:'Virtual hosts · 3 control/candidate requests',api:'API fixture · 6 two-actor ownership checks',parameters:'Parameter signals · 6 harmless marker checks',custom:'Custom cases · bounded declarative GET/lab POST checks',subdomains:'DNS fixture · 3 local control/candidate queries'};
+const moduleLabels:Record<LabModule,string>={directories:'Directories · 3 resources + random missing-path control',vhosts:'Virtual hosts · 3 control/candidate requests',api:'API fixture · 6 two-actor ownership checks',parameters:'Parameter signals · 6 harmless marker checks',custom:'Custom cases · bounded declarative GET/lab POST checks',subdomains:'DNS fixture · 3 local control/candidate queries'};
 const moduleBudgets:Record<LabModule,number>={directories:4,vhosts:3,api:6,parameters:6,custom:0,subdomains:3};
 const terminal = new Set(['completed','cancelled','failed','timed_out','interrupted']);
 
