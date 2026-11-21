@@ -135,6 +135,7 @@ assert len(inventory)==3 and sorted(f['evidence']['access'] for f in inventory)=
 assert all(f['severity']=='informational' and f['evidence']['transport']['scope']=='isolated_fixture_only' for f in inventory)
 names=[f for f in findings if f['module']=='subdomains']
 assert len(findings)==16 and len(names)==1 and names[0]['path']=='app.lab.invalid'
+assert names[0]['evidence']['controls']['seeded']['dns_metadata']=={'authoritative':False,'recursion_available':False,'truncated':False,'alias_observed':False,'scope':'isolated_fixture_only'}
 assert names[0]['evidence']['records']==['192.0.2.10']
 canaries=[f for f in findings if f['evidence'].get('rule_id')=='fixture-path-allowlist-v1']
 assert len(canaries)==1 and canaries[0]['confidence']=='fixture-confirmed' and canaries[0]['severity']=='medium'
