@@ -149,6 +149,12 @@ finding=report['findings'][0]
 review_req=urllib.request.Request(base+'/v1/scans/'+scan['id']+'/findings/'+finding['id']+'/review',data=b'{"state":"acknowledged"}',method='PATCH',headers={'Authorization':'Bearer '+values['FUZZCORE_TOKEN'],'Content-Type':'application/json'})
 with urllib.request.urlopen(review_req,timeout=10) as response:assert json.load(response)['review_state']=='acknowledged'
 assert all(f['review_state']=='open' for f in request('/v1/report-snapshots/'+snapshot['id'])['report']['findings'])
+filtered=request('/v1/scans/'+scan['id']+'/report.json?severity=high&module=api')
+assert filtered['totals']['findings']==1 and filtered['unfiltered_findings']==13
+assert filtered['filters']=={'severity':'high','module':'api'}
+assert request('/v1/scans/'+scan['id']+'/findings?severity=high&module=api')==filtered['findings']
+assert all(f['review_retest_id'] is None for f in filtered['findings'])
+
 # A smaller linked retest copies the original directory-only scope, with fresh consent.
 original_id=report['scan']['id']
 first_run=request('/v1/scans')[ -1 ]
