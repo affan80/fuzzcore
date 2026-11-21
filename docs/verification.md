@@ -24,14 +24,18 @@ See `api-fixture-evidence.md`. Eleven failing regression cases preceded their fi
 
 See `parameter-fixture-evidence.md`. Five backend and one mobile-policy regression failed first. The full local suite passes 58 backend tests, five mobile-policy tests, TypeScript and web export. Positive/secure loopback fixture tests and web UI completed nineteen total requests. Reflection/duplicate-value outputs stay informational signals, not injection/bypass proof. Exact-head CI https://github.com/affan80/fuzzcore/actions/runs/44876815211 passed all four jobs, including Docker nineteen-request smoke and APK compile, before PR15 merged.
 
-## Custom cases, local verification pending its own CI
+## Custom cases, verified before merge
 
-See `custom-fixture-evidence.md`. Fourteen backend cases and one mobile-policy case failed first. Full local suite: 74 backend tests, six mobile-policy tests, TypeScript and web export. Actual loopback UI completed twenty requests using one custom case. The maximum three-case plan is twenty-two requests. Schema rejection, mismatch behavior and immutable case versions are tested. Fresh Docker/APK CI is still required.
+See `custom-fixture-evidence.md`. Fourteen backend cases and one mobile-policy case failed first. Full local suite: 74 backend tests, six mobile-policy tests, TypeScript and web export. Actual loopback UI completed twenty requests using one custom case. The maximum three-case plan is twenty-two requests. Schema rejection, mismatch behavior and immutable case versions are tested. Exact-head CI https://github.com/affan80/fuzzcore/actions/runs/44878113215 passed all four jobs including Docker22 checks and APK, before PR16 merged.
+
+## Local DNS, local verification pending its own CI
+
+See `dns-fixture-evidence.md`. Five backend regressions and one mobile-policy regression failed first. Full local suite:79 backend tests,7 mobile tests, TypeScript and web export. Real local UDP positive/wildcard fixtures pass. Actual loopback UI completes23 checks with one custom case. Maximum plan25 checks. DNS container integration and APK are pending their fresh exact-head CI.
 
 ## Still unverified or unfinished
 
 - Physical Android install, SecureStore, background/reconnect behavior and trusted phone-to-backend HTTPS. User computer OS and Android device details are still needed.
-- Broader API inventory/transmission assessment, DNS module and broader custom POST/header checks; traversal/upload fixture scenarios; report/remediation/retest flow and full-app acceptance.
+- Broader API inventory/transmission assessment, broader DNS inputs and custom POST/header checks; traversal/upload fixture scenarios; report/remediation/retest flow and full-app acceptance.
 - Module-specific progress UI beyond the current shared run counters.
 - All possible egress routes, compromise resistance and production deployment hardening.
 - Recovery of every RQ failure mode. Current recovery handles unsent intents and explicit stale interrupted work; it is not a full distributed scheduler.
