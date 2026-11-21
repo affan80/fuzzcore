@@ -11,3 +11,6 @@ export function buildLabRequest(confirmed: boolean, modules: readonly string[] =
     modules: [...modules].sort(), authorization_confirmed: true,
   };
 }
+
+// Stateless lab-only POST. This is data, never a script or an arbitrary endpoint.
+export const DISPOSABLE_POST_EXAMPLE={path:'/custom-disposable',method:'POST',params:{},body:{marker:'harmless-marker'},expect_status:200,contains:'fixture',expect_headers:{'content-type':'application/json','x-fixture-mode':'disposable'}};
