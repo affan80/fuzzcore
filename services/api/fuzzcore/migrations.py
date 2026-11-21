@@ -8,7 +8,7 @@ def upgrade(engine, metadata, active_index):
     with engine.begin() as connection:
         connection.execute(text('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)'))
         version = connection.execute(text('SELECT COALESCE(MAX(version), 0) FROM schema_migrations')).scalar_one()
-        if version > 9:
+        if version > 10:
             raise RuntimeError('Database schema is newer than this application')
         if version < 1:
             metadata.create_all(connection)
@@ -80,3 +80,9 @@ def upgrade(engine, metadata, active_index):
             columns={c['name'] for c in inspect(connection).get_columns('scans')}
             if 'retest_of' not in columns:connection.execute(text('ALTER TABLE scans ADD COLUMN retest_of VARCHAR'))
             connection.execute(text('INSERT INTO schema_migrations (version) VALUES (9)'))
+
+        if version < 10:
+            columns={c['name'] for c in inspect(connection).get_columns('scans')}
+            if 'module_progress' not in columns:
+                connection.execute(text("ALTER TABLE scans ADD COLUMN module_progress TEXT NOT NULL DEFAULT '{}'"))
+            connection.execute(text('INSERT INTO schema_migrations (version) VALUES (10)'))
