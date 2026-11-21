@@ -10,12 +10,12 @@
 
 ## Local setup and checks
 
-The current source is temporarily stored in `fuzzcore-source.b64` while the initial upload is being expanded into a normal source tree. Decode the reviewed bundle locally with `base64 -d fuzzcore-source.b64 > source.zip`, extract it, then work from its `fuzzcore` directory. Never commit decoded secrets or dependencies. Changes to extracted code must also update the bundle until migration is complete; never hand-edit its encoded contents.
+The source uses the normal `apps/`, `services/`, `infra/` and `docs/` tree. Do not commit dependency folders, build outputs or encoded copies of the source.
 
 Before requesting review:
 
 1. Run backend tests: `PYTHONPATH=services/api pytest services/api/tests -q` after installing the pinned requirements in a virtual environment.
-2. Run mobile checks from `apps/mobile`: `npm ci`, `npx tsc --noEmit`, and `npx expo export --platform web`.
+2. Run mobile checks from `apps/mobile`: `npm ci`, `node --experimental-strip-types --test tests/*.test.mjs`, `npx tsc --noEmit`, and `npx expo export --platform web`.
 3. For container changes, run the isolated fixture smoke test and document the actual environment/results. For native changes, compile and install the APK on Android and report what you tested.
 4. Write a failing regression test for changed behavior, make it pass, then review the diff. Do not claim tests, device checks or builds ran when they did not.
 
