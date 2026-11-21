@@ -27,6 +27,8 @@ class Scan(Base):
     target_id = Column(String, nullable=False, default='local-lab')
     scope_version = Column(String, nullable=False, default='lab-v1')
     authorization_confirmed_at = Column(String, nullable=True)
+    custom_cases = Column(Text, nullable=False, default='[]')
+    case_version = Column(String, nullable=True)
     selected_modules = Column(String, nullable=False, default='directories')
     status = Column(String, nullable=False, default='queued')
     attempted = Column(Integer, nullable=False, default=0)
@@ -81,7 +83,7 @@ def validate_lab_origin(origin):
     return 'http://lab:8081'
 
 
-def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None):
+def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None):
     """Cooperative, single-worker fixture discovery. probe accepts fixed paths only."""
     with sessions() as db:
         claimed = db.execute(update(Scan).where(
@@ -93,7 +95,10 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
             return
     started = clock()
     with sessions() as db:
-        modules = db.get(Scan, scan_id).selected_modules.split(',')
+        row = db.get(Scan, scan_id)
+        modules = row.selected_modules.split(',')
+        custom_cases = json.loads(row.custom_cases)
+        case_version = row.case_version
     from .vhosts import CASES, discover
     plan = ([('directories', path) for path in PATHS] if 'directories' in modules else [])
     plan += ([('vhosts', case) for case in CASES] if 'vhosts' in modules else [])
@@ -103,9 +108,10 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
     from .parameters import CASES as PARAM_CASES, assess as assess_parameters
     plan += ([('parameters', case) for case in PARAM_CASES] if 'parameters' in modules else [])
     api_results = {}
+    plan += ([('custom',case) for case in custom_cases] if 'custom' in modules else [])
     parameter_results = {}
     try:
-        if not plan or len(plan) > 19 or set(modules) - {'directories','vhosts','api','parameters'}:
+        if not plan or len(plan) > 22 or set(modules) - {'directories','vhosts','api','parameters','custom'}:
             raise ValueError('Unsupported run plan')
         for module, path in plan:
             with sessions() as db:
@@ -114,12 +120,12 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                     row.status = 'cancelled'; row.updated_at = utcnow(); db.commit(); return
                 if row.status != 'running':
                     return
-                if row.attempted >= row.planned or row.attempted >= 19:
+                if row.attempted >= row.planned or row.attempted >= 22:
                     raise ValueError('Request budget exhausted')
                 if clock() - started > 300:
                     row.status = 'timed_out'; row.updated_at = utcnow(); db.commit(); return
                 row.attempted += 1; row.updated_at = utcnow(); db.commit()
-            result = vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else None
+            result = vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else custom_probe(path) if module == 'custom' else None
             status = result['status_code'] if result is not None else probe(path)
             if module == 'vhosts':
                 vhost_results[path] = result
@@ -151,6 +157,12 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                         db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=found['path'],
                             status_code=200, module='parameters', severity='informational', confidence='signal',
                             evidence=json.dumps(found['evidence']), summary=found['summary']))
+                if module == 'custom':
+                    db.add(Finding(id=str(uuid.uuid4()),scan_id=scan_id,path=path['path'],
+                        status_code=status,module='custom',severity='informational',
+                        confidence='observed' if result['passed'] else 'signal',
+                        summary='Declarative fixture expectation '+('passed.' if result['passed'] else 'did not match; review required, not a vulnerability proof.'),
+                        evidence=json.dumps({'rule_id':'custom-expectation-v1','case_version':case_version,**result})))
                 if status == 429:
                     row.status = 'failed'; row.error = 'target_rate_limited'; db.commit(); return
                 db.commit()
@@ -207,4 +219,10 @@ def execute_job(scan_id):
             response=client.get('/parameter-check',params={'case':case})
             response.raise_for_status()
             return response.json()
-        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe)
+        def custom_probe(case):
+            from .custom_cases import CustomCase
+            case=CustomCase.model_validate(case).model_dump()
+            response=client.post('/custom-check',json=case)
+            response.raise_for_status()
+            return response.json()
+        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe)
