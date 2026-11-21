@@ -85,6 +85,16 @@ def create_scanner(transport=None, delay=time.sleep):
                 delay(0.5)
                 return result
         finally:lock.release()
+    @app.get('/dns-check')
+    def dns_check(case:Literal['baseline','control','seeded']):
+        from .subdomains import production_probe
+        if not lock.acquire(blocking=False):raise HTTPException(429,'probe_busy')
+        try:
+            try:result=production_probe(case)
+            except Exception:raise HTTPException(502,'dns_fixture_unavailable')
+            delay(0.5)
+            return result
+        finally:lock.release()
     return app
 
 
