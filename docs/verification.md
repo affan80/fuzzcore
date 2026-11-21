@@ -36,11 +36,15 @@ See `dns-fixture-evidence.md`. Five backend regressions and one mobile-policy re
 
 See `report-retest-evidence.md`. Seven failing backend regressions preceded implementation. Full local suite:87backend tests,7mobile tests, types/web export. Real loopback UI proved JSON+HTML downloads, matching totals/review state, immutable snapshot and same-scope linked retest/comparison. Report/mobile pixels inspected. Fresh Docker/APK CI is required; native file share is unverified. npm audit:3moderate Expo fingerprint/minimatch advisories, no high/critical; no blind major downgrade applied.
 
+## Durable module progress, local verification pending CI
+
+See `module-progress-evidence.md`. Nine backend regressions failed first, including final-response429; three new mobile formatting checks began red. Full local suite:96backend,10mobile, types/web export. Real loopback UI showed running/completed per-module counters, matching report export and cancellation with later modules not_run. Historic fine-grained results are explicitly unavailable, never inferred. Docker smoke checks the stored25-check plan; exact-head CI and native acceptance remain separate.
+
 ## Still unverified or unfinished
 
 - Physical Android install, SecureStore, background/reconnect behavior and trusted phone-to-backend HTTPS. User computer OS and Android device details are still needed.
 - Broader API inventory/transmission assessment, broader DNS inputs and custom POST/header checks; traversal/upload fixture scenarios; richer report/remediation/retest workflow and full-app acceptance.
-- Module-specific progress UI beyond the current shared run counters.
+- Physical Android verification of per-module progress after background/reconnect.
 - All possible egress routes, compromise resistance and production deployment hardening.
 - Recovery of every RQ failure mode. Current recovery handles unsent intents and explicit stale interrupted work; it is not a full distributed scheduler.
 - Final dependency advisory review, production signing and clean-machine submission rehearsal.
