@@ -20,3 +20,8 @@ test('confirmed module choices are explicit, unique and limited to fixture imple
     assert.throws(() => buildLabRequest(true, modules), /module/);
   }
 });
+
+test('API fixture module is a bounded supported choice', () => {
+  assert.deepEqual(buildLabRequest(true, ['api']).modules, ['api']);
+  assert.deepEqual(buildLabRequest(true, ['directories','api','vhosts']).modules, ['api','directories','vhosts']);
+});
