@@ -70,3 +70,7 @@ GET remains default. POST is limited to one stateless disposable fixture with a 
 ## Directory signatures
 
 Production directory dispatch uses a randomized missing-path control first, then three fixed resources, with one request each. Status/length/SHA256 comparisons filter exact soft-404 signatures. Unavailable/redirecting controls fail partial rather than imply a clean assessment. The scanner caps body processing at16KiB and retains no raw body. The old status-only helper is not a production fallback. See `directory-control-evidence.md`.
+
+## Explicit additional directory cases
+
+Migration11 persists directory_cases as an immutable per-run selection. The default is empty. canary-v1 adds three fixed read-only symbolic fixture cases under the directories module, never host-file access. Its counters plan7 directory requests and a maximum28 full plan; default4/25 plans are preserved. Retry/retest checks require the same selection. Capabilities advertise request cost and off-by-default status. See `file-canary-evidence.md`.
