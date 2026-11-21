@@ -99,6 +99,19 @@ custom_findings=[f for f in findings if f['module']=='custom']
 assert len(findings)==10 and len(custom_findings)==3
 assert sorted(f['evidence']['passed'] for f in custom_findings)==[False,True,True]
 assert all(f['evidence']['case_version']==detail['case_version'] for f in custom_findings)
+# DNS adds exactly three local fixture queries, never HTTP to discovered names.
+scan=request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts','api','parameters','custom','subdomains'],'custom_cases':cases},key='ci-dns-0006')
+for attempt in range(100):
+    detail=request('/v1/scans/'+scan['id'])
+    if detail['status']=='completed':break
+    if detail['status'] in ('failed','timed_out'):raise RuntimeError('DNS fixture failed')
+    time.sleep(1)
+else:raise RuntimeError('DNS fixture timed out')
+findings=request('/v1/scans/'+scan['id']+'/findings')
+assert detail['attempted']==detail['planned']==25
+names=[f for f in findings if f['module']=='subdomains']
+assert len(findings)==11 and len(names)==1 and names[0]['path']=='app.lab.invalid'
+assert names[0]['evidence']['records']==['192.0.2.10']
 # Network membership check: scanner has neither data network nor injected data credentials.
 container = subprocess.check_output(['docker','compose','ps','-q','scanner'],text=True).strip()
 config = json.loads(subprocess.check_output(['docker','inspect',container]))[0]
