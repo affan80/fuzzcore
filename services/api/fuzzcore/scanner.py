@@ -4,7 +4,7 @@ import time
 from typing import Literal
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 
 from .core import validate_lab_origin, http_probe
 from .custom_cases import CustomCase
@@ -50,6 +50,18 @@ def create_scanner(transport=None, delay=time.sleep):
                               timeout=10,follow_redirects=False,trust_env=False) as client:
                 try:result=http_file_probe(client)(case)
                 except (httpx.HTTPError,ValueError):raise HTTPException(502,'file_fixture_evidence_unavailable')
+                delay(0.5)
+                return result
+        finally:lock.release()
+    @app.get('/upload-check')
+    def upload_check(case:Literal['create','read','delete','verify'],object_id:str=Query(pattern=r'^[a-f0-9]{32}$')):
+        import uuid
+        from .uploads import http_upload_probe
+        if not lock.acquire(blocking=False):raise HTTPException(429,'probe_busy')
+        try:
+            with httpx.Client(base_url=validate_lab_origin('http://lab:8081'),transport=transport,timeout=10,follow_redirects=False,trust_env=False) as client:
+                try:result=http_upload_probe(client,str(uuid.UUID(object_id)))(case)
+                except (httpx.HTTPError,ValueError):raise HTTPException(502,'upload_evidence_unavailable')
                 delay(0.5)
                 return result
         finally:lock.release()
