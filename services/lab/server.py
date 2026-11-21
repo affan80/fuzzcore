@@ -11,6 +11,8 @@ class Handler(BaseHTTPRequestHandler):
     allow_seeded_cross_owner = True
 
     parameter_signals = True
+    parameter_parser_mismatch = False
+    parameter_error_signal = False
     directory_soft404 = False
     allow_seeded_canary = True
 
@@ -104,7 +106,12 @@ class Handler(BaseHTTPRequestHandler):
             if not self.parameter_signals:
                 if len(values)>1:status=400
                 values=[]
-            body=json.dumps({'fixture':True,'values':values}).encode()
+            validation=values[0] if values else None
+            effective=values[-1] if values and self.parameter_parser_mismatch else validation
+            synthetic_error=self.parameter_error_signal and any('\'' in value for value in values)
+            if synthetic_error:status=500
+            body=json.dumps({'fixture':True,'values':values,'validation_value':validation,'effective_value':effective,
+                'error_kind':'synthetic_parse_error' if synthetic_error else None}).encode()
             self.send_response(status);self.send_header('Content-Type','application/json')
             self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
             return
