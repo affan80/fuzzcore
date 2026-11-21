@@ -2,6 +2,12 @@
 
 Updated 21 Nov 2026. A compiled APK, working web preview and physical Android acceptance are separate gates.
 
+## Current summary
+
+All six bounded fixture modules are implemented. Defaults remain4directory/25maximum full-plan attempts. Canary, benign upload and curated API inventory are explicit immutable opt-ins. All options with3custom cases reserve38/use36ordinary attempts and retain2cleanup recovery reserves. Saved case versions, filtered JSON/HTML/snapshots and manual linked-retest fixed review are implemented. See [readiness](readiness.md) for honest release gates. Sections below record slice-time evidence; their older future-tense statements do not supersede this summary.
+
+Latest merged evidence before the parameter-observation PR: PR27 exact-head https://github.com/affan80/fuzzcore/actions/runs/44889000637 all four jobs passed, including real Docker and APK. Merged dev6d312689f47a9ea6917a6abcab486cec4ddbd0b0 tree matched tested source. PR26 postmerge https://github.com/affan80/fuzzcore/actions/runs/44888987832 also passed. Parameter-observation PR28 exact-head https://github.com/affan80/fuzzcore/actions/runs/44889750453 also passed all four jobs before merge, with219backend/19mobile local tests and real HTTP differential fixtures. No native/device claim.
+
 ## Verified foundation on dev
 
 - PR11 postmerge run https://github.com/affan80/fuzzcore/actions/runs/44871310736 passed backend/mobile checks, real Docker/Postgres/Redis/RQ/scanner/fixture integration and APK compilation.
@@ -52,10 +58,10 @@ See `directory-control-evidence.md`. Ten new backend regressions failed before t
 
 See `file-canary-evidence.md`. Eight new backend regressions failed before fixes; fourteen new tests pass. Full suite138backend/12mobile, types/web export. Explicit immutable selection adds3symbolic read-only requests, with no host files read or included. Defaults stay4/25; opt-in directories7/full maximum28. Positive/secure real fixtures and actual26-check/10-result web journey pass. PR22 exact-head CI https://github.com/affan80/fuzzcore/actions/runs/44884208777 passed all four jobs, including Docker28-check/12-result smoke and APK. PR22 merged to dev at 4f019805c2f6103716fbf8a0cf34fc87d08410ec. Native acceptance remains separate. The later upload slice is described below.
 
-## Still unverified or unfinished
+## Current acceptance gaps, reconciled21Nov2026
 
 - Physical Android install, SecureStore, background/reconnect behavior and trusted phone-to-backend HTTPS. User computer OS and Android device details are still needed.
-- Broader API inventory/transmission assessment, broader DNS inputs and saved custom-case listing; richer report/remediation/retest workflow and full-app acceptance.
+- Full-app/device acceptance. Curated API inventory, bounded header/transport observations, saved case listing, report filters and manual fixed-review gates now exist. Arbitrary targets/schema import, public DNS, broad production assessments and automatic fixes remain outside the implemented lab boundary.
 - Physical Android verification of per-module progress after background/reconnect.
 - All possible egress routes, compromise resistance and production deployment hardening.
 - Recovery of every RQ failure mode. Current recovery handles unsent intents and explicit stale interrupted work; it is not a full distributed scheduler.
