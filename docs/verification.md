@@ -50,15 +50,20 @@ See `directory-control-evidence.md`. Ten new backend regressions failed before t
 
 ## Opt-in synthetic file canary, local verification pending CI
 
-See `file-canary-evidence.md`. Eight new backend regressions failed before fixes; fourteen new tests pass. Full suite138backend/12mobile, types/web export. Explicit immutable selection adds3symbolic read-only requests, with no host files read or included. Defaults stay4/25; opt-in directories7/full maximum28. Positive/secure real fixtures and actual26-check/10-result web journey pass. Docker28-check/12-result smoke is prepared; exact-head CI and native acceptance remain separate. Benign upload/cleanup remains unfinished.
+See `file-canary-evidence.md`. Eight new backend regressions failed before fixes; fourteen new tests pass. Full suite138backend/12mobile, types/web export. Explicit immutable selection adds3symbolic read-only requests, with no host files read or included. Defaults stay4/25; opt-in directories7/full maximum28. Positive/secure real fixtures and actual26-check/10-result web journey pass. PR22 exact-head CI https://github.com/affan80/fuzzcore/actions/runs/44884208777 passed all four jobs, including Docker28-check/12-result smoke and APK. PR22 merged to dev at 4f019805c2f6103716fbf8a0cf34fc87d08410ec. Native acceptance remains separate. The later upload slice is described below.
 
 ## Still unverified or unfinished
 
 - Physical Android install, SecureStore, background/reconnect behavior and trusted phone-to-backend HTTPS. User computer OS and Android device details are still needed.
-- Broader API inventory/transmission assessment, broader DNS inputs and saved custom-case listing; benign upload/cleanup fixture scenarios; richer report/remediation/retest workflow and full-app acceptance.
+- Broader API inventory/transmission assessment, broader DNS inputs and saved custom-case listing; richer report/remediation/retest workflow and full-app acceptance.
 - Physical Android verification of per-module progress after background/reconnect.
 - All possible egress routes, compromise resistance and production deployment hardening.
 - Recovery of every RQ failure mode. Current recovery handles unsent intents and explicit stale interrupted work; it is not a full distributed scheduler.
 - Final dependency advisory review, production signing and clean-machine submission rehearsal.
 
 A discovered path or host is not a vulnerability. An empty result set is not a security certificate. No full-app or native-device completion is claimed.
+
+
+### Benign temporary upload slice
+
+Separate opt-in `upload-v1` adds a fixed in-memory harmless-text create/read/delete/absence check plus two explicit cleanup recovery reserves. Defaults remain 4 directory / 25 full-run attempts. Both canary+upload options reserve 13 directory / 34 maximum full-run attempts; normal maximum execution uses 32 and shows 2 unused reserves. No arbitrary content, filesystem writes, executable bytes or upload-vulnerability claim. Cleanup status/attempts are persisted and exported; unverified cleanup blocks new uploads, not read-only runs. Cancellation still performs reserved cleanup; expiry is a fallback, not proof. See [upload cleanup evidence](upload-cleanup-evidence.md) for test-first results, limits, source references and stop-worker recovery.
