@@ -30,6 +30,7 @@ class Scan(Base):
     scope_version = Column(String, nullable=False, default='lab-v1')
     authorization_confirmed_at = Column(String, nullable=True)
     custom_cases = Column(Text, nullable=False, default='[]')
+    directory_cases = Column(Text,nullable=False,default='[]')
     case_version = Column(String, nullable=True)
     retest_of = Column(String,nullable=True)
     selected_modules = Column(String, nullable=False, default='directories')
@@ -98,7 +99,7 @@ def validate_lab_origin(origin):
     return 'http://lab:8081'
 
 
-def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None, dns_probe=None, directory_probe=None):
+def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None, dns_probe=None, directory_probe=None, file_probe=None):
     """Cooperative, single-worker fixture discovery. probe accepts fixed paths only."""
     with sessions() as db:
         claimed = db.execute(update(Scan).where(
@@ -113,14 +114,19 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
         row = db.get(Scan, scan_id)
         modules = row.selected_modules.split(',')
         custom_cases = json.loads(row.custom_cases)
+        directory_cases=json.loads(row.directory_cases)
         case_version = row.case_version
         # Legacy queued jobs have no fine-grained history. Start tracking only
         # once this worker owns a fresh, unattempted execution.
         if not json.loads(row.module_progress) and row.attempted==0:
-            row.module_progress=json.dumps(initial_progress(modules,custom_cases));db.commit()
+            row.module_progress=json.dumps(initial_progress(modules,custom_cases,directory_cases));db.commit()
     from .vhosts import CASES, discover
     directory_paths=(PATHS[-1],*PATHS[:-1]) if directory_probe is not None else PATHS
     plan = ([('directories', path) for path in directory_paths] if 'directories' in modules else [])
+    from .file_canary import CASES as FILE_CASES,assess as assess_file
+    file_results={}
+    if 'directories' in modules and 'canary-v1' in directory_cases:
+        plan += [('directories','canary:'+case) for case in FILE_CASES]
     plan += ([('vhosts', case) for case in CASES] if 'vhosts' in modules else [])
     from .api_checks import CASES as API_CASES, assess
     plan += ([('api', case) for case in API_CASES] if 'api' in modules else [])
@@ -135,7 +141,7 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
     dns_results = {}
     parameter_results = {}
     try:
-        if not plan or len(plan) > 25 or set(modules) - {'directories','vhosts','api','parameters','custom','subdomains'}:
+        if not plan or len(plan) > 28 or set(directory_cases)-{'canary-v1'} or len(directory_cases)!=len(set(directory_cases)) or (directory_cases and 'directories' not in modules) or set(modules) - {'directories','vhosts','api','parameters','custom','subdomains'}:
             raise ValueError('Unsupported run plan')
         for module, path in plan:
             with sessions() as db:
@@ -144,14 +150,16 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                     row.status = 'cancelled'; row.updated_at = utcnow(); settle_progress(row); db.commit(); return
                 if row.status != 'running':
                     return
-                if row.attempted >= row.planned or row.attempted >= 25:
+                if row.attempted >= row.planned or row.attempted >= 28:
                     raise ValueError('Request budget exhausted')
                 if clock() - started > 300:
                     row.status = 'timed_out'; row.updated_at = utcnow(); settle_progress(row); db.commit(); return
                 row.attempted += 1; advance_progress(row,module); row.updated_at = utcnow(); db.commit()
-            result = directory_probe(path) if module=='directories' and directory_probe is not None else vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else custom_probe(path) if module == 'custom' else dns_probe(path) if module == 'subdomains' else None
+            result = file_probe(path.split(':',1)[1]) if module=='directories' and path.startswith('canary:') else directory_probe(path) if module=='directories' and directory_probe is not None else vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else custom_probe(path) if module == 'custom' else dns_probe(path) if module == 'subdomains' else None
             status = (200 if result['rcode'] in (0,3) else 502) if module=='subdomains' else result['status_code'] if result is not None else probe(path)
-            if module=='directories' and directory_probe is not None:
+            if module=='directories' and path.startswith('canary:'):
+                file_results[path.split(':',1)[1]]=result
+            elif module=='directories' and directory_probe is not None:
                 directory_results[path]=result
             if module == 'vhosts':
                 vhost_results[path] = result
@@ -167,13 +175,16 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                 advance_progress(row,module,completed=True)
                 if status == 429:
                     row.status = 'failed'; row.error = 'target_rate_limited'; fail_module(row,module); settle_progress(row); db.commit(); return
-                if module == 'directories' and directory_probe is None and 200 <= status < 300:
+                if module == 'directories' and directory_probe is None and path in PATHS and 200 <= status < 300:
                     db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=path,
                                    status_code=status, summary='Lab resource discovered; not a vulnerability.'))
-                if module=='directories' and directory_probe is not None:
+                if module=='directories' and directory_probe is not None and path in PATHS:
                     from .directories import discover as discover_directories
                     for found in discover_directories({key:value for key,value in directory_results.items() if key in (PATHS[-1],path)}):
                         db.add(Finding(id=str(uuid.uuid4()),scan_id=scan_id,path=found['path'],status_code=found['status_code'],module='directories',evidence=json.dumps(found['evidence']),summary='Lab resource differs from random missing-path control; discovery only.'))
+                if module=='directories' and path=='canary:canary':
+                    found=assess_file(file_results)
+                    if found:db.add(Finding(id=str(uuid.uuid4()),scan_id=scan_id,path=found['path'],status_code=200,module='directories',severity=found['severity'],confidence=found['confidence'],summary=found['summary'],evidence=json.dumps(found['evidence'])))
                 if module == 'vhosts' and path == 'seeded':
                     found = discover(vhost_results)
                     if found:
@@ -240,6 +251,11 @@ def execute_job(scan_id):
             response = client.get('/probe', params={'path': path})
             response.raise_for_status()
             return response.json()['status_code']
+        def file_probe(case):
+            from .file_canary import CASES
+            if case not in CASES:raise ValueError('Unknown file fixture case')
+            response=client.get('/file-canary',params={'case':case})
+            response.raise_for_status();return response.json()
         def directory_probe(path):
             if path not in PATHS:raise ValueError('Out-of-scope directory path')
             response=client.get('/directory-check',params={'path':path})
@@ -276,4 +292,4 @@ def execute_job(scan_id):
             response=client.get('/dns-check',params={'case':case})
             response.raise_for_status()
             return response.json()
-        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe, dns_probe=dns_probe, directory_probe=directory_probe)
+        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe, dns_probe=dns_probe, directory_probe=directory_probe,file_probe=file_probe)
