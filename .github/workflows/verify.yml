@@ -2,7 +2,7 @@ name: Verify lab baseline
 on:
   push:
     branches: [dev, main]
-    paths: ['fuzzcore-source.b64', '.github/workflows/**']
+    paths: ['apps/**', 'services/**', 'infra/**', 'compose.yaml', '.github/workflows/**']
   pull_request:
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
@@ -21,8 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack reviewed source bundle
-        run: if [ -f fuzzcore-source.b64 ]; then base64 -d fuzzcore-source.b64 > /tmp/source.zip && unzip -q /tmp/source.zip -d /tmp/source && cp -a /tmp/source/fuzzcore/. .; fi
       - uses: actions/setup-python@v5
         with: {python-version: '3.10'}
       - run: pip install -r services/api/requirements-dev.txt
@@ -35,8 +33,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack reviewed source bundle
-        run: if [ -f fuzzcore-source.b64 ]; then base64 -d fuzzcore-source.b64 > /tmp/source.zip && unzip -q /tmp/source.zip -d /tmp/source && cp -a /tmp/source/fuzzcore/. .; fi
       - uses: actions/setup-python@v5
         with: {python-version: '3.10'}
       - run: python infra/ci_env.py
@@ -56,8 +52,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack reviewed source bundle
-        run: if [ -f fuzzcore-source.b64 ]; then base64 -d fuzzcore-source.b64 > /tmp/source.zip && unzip -q /tmp/source.zip -d /tmp/source && cp -a /tmp/source/fuzzcore/. .; fi
       - uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/mobile/package-lock.json}
       - uses: actions/setup-java@v4
@@ -72,28 +66,3 @@ jobs:
           path: apps/mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 7
-  materialize-source:
-    if: github.event_name == 'pull_request' && github.head_ref == 'docs/contribution-flow' && github.event.pull_request.head.repo.full_name == github.repository
-    needs: [unit, isolated-integration, apk, pr-target]
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: docs/contribution-flow
-      - name: Expand the verified app source into normal repository files
-        run: |
-          test -f fuzzcore-source.b64 || exit 0
-          base64 -d fuzzcore-source.b64 > /tmp/materialize.zip
-          echo 'fdf985b7684d3eff9b6bf65fb37be4b34ab6a99e2506c7b6718dc4984f620e3d  /tmp/materialize.zip' | sha256sum --check
-          unzip -q /tmp/materialize.zip -d /tmp/materialized
-          for item in apps services infra docs compose.yaml README.md CONTRIBUTING.md .gitignore .env.example; do
-            cp -a /tmp/materialized/fuzzcore/$item .
-          done
-          git add apps services infra docs compose.yaml README.md CONTRIBUTING.md .gitignore .env.example
-          git rm fuzzcore-source.b64
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Expand verified Day 1 source into normal repository tree'
-          git push origin HEAD:docs/contribution-flow
