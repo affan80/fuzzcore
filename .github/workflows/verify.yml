@@ -1,6 +1,7 @@
 name: Verify lab baseline
 on:
   push:
+    branches: [dev, main]
     paths: ['fuzzcore-source.b64', '.github/workflows/**']
   pull_request:
     types: [opened, synchronize, reopened, edited]
@@ -24,7 +25,7 @@ jobs:
         run: base64 -d fuzzcore-source.b64 > /tmp/source.zip && unzip -q /tmp/source.zip -d /tmp/source && cp -a /tmp/source/fuzzcore/. .
       - uses: actions/setup-python@v5
         with: {python-version: '3.10'}
-      - run: pip install -r services/api/requirements.txt
+      - run: pip install -r services/api/requirements-dev.txt
       - run: PYTHONPATH=services/api pytest services/api/tests -q
       - uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/mobile/package-lock.json}
@@ -39,6 +40,8 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.10'}
       - run: python infra/ci_env.py
+      - name: Validate effective Compose configuration
+        run: docker compose config --quiet
       - run: docker compose up --build -d
       - run: python infra/smoke.py
       - name: Container readiness diagnostics
