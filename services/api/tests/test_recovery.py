@@ -76,3 +76,42 @@ def test_legacy_schema_upgrade_preserves_history_and_unknown_authorization(tmp_p
         assert row.target_id == 'local-lab'
     # Re-running migrations is harmless.
     database('sqlite:///' + str(path))
+
+
+def test_upgrade_interrupts_legacy_unconfirmed_queue_without_replaying(tmp_path):
+    import sqlite3
+    from fuzzcore.outbox import retry_pending
+    path = tmp_path/'legacy-queued.db'
+    db = sqlite3.connect(path)
+    db.executescript('''CREATE TABLE scans (
+        id VARCHAR PRIMARY KEY, owner VARCHAR NOT NULL, request_key VARCHAR NOT NULL,
+        status VARCHAR NOT NULL, attempted INTEGER NOT NULL, planned INTEGER NOT NULL,
+        error VARCHAR, created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL,
+        UNIQUE(owner,request_key));
+        INSERT INTO scans VALUES ('old-queued','demo','old-queue-001','queued',0,4,NULL,'2026-11-20','2026-11-20');''')
+    db.close()
+    sessions = database('sqlite:///' + str(path))
+    delivered = []
+    assert retry_pending(sessions, delivered.append)['failed'] == 0
+    with sessions() as db:
+        row = db.get(Scan,'old-queued')
+        assert row.status == 'interrupted'
+        assert row.error == 'authorization_confirmation_required'
+        assert row.authorization_confirmed_at is None
+    assert delivered == []
+
+
+def test_upgrade_backfills_only_confirmed_pending_intent(tmp_path):
+    from sqlalchemy import text
+    from fuzzcore.outbox import retry_pending
+    path = tmp_path/'confirmed-pending.db'
+    sessions = database('sqlite:///' + str(path))
+    with sessions() as db:
+        db.add(Scan(id='confirmed',owner='demo',request_key='confirmed-key',status='queued',authorization_confirmed_at='2026-11-21T00:00:00+00:00'))
+        db.execute(text('DELETE FROM schema_migrations WHERE version >= 4'))
+        db.commit()
+    sessions = database('sqlite:///' + str(path))
+    delivered = []
+    assert retry_pending(sessions, delivered.append) == {'checked':1,'failed':0}
+    assert delivered == ['confirmed']
+    assert retry_pending(sessions, delivered.append)['checked'] == 0
