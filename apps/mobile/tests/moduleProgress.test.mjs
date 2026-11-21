@@ -13,3 +13,8 @@ test('cancelled and unstarted modules are not displayed as completed',()=>{
 test('missing historic progress is shown as unavailable rather than inferred',()=>{
  assert.equal(moduleProgressText(undefined),'Detailed progress unavailable for this historic run.');
 });
+
+
+test('unused cleanup recovery requests are skipped, never reported as responses',()=>{
+ assert.equal(moduleProgressText({state:'completed',planned:10,attempted:8,completed:8,skipped:2}),'completed · 8/10 responses completed · 8 attempted · 2 unused cleanup reserves');
+});
