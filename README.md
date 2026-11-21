@@ -33,7 +33,7 @@ npx expo export --platform web
 
 Use Node 22 for the current pinned Expo toolchain. Preserve lockfiles. Check current official docs before changes, then prove compatibility with tests rather than upgrading blindly.
 
-Read `CONTRIBUTING.md`. All contribution PRs target `dev`; `main` is preserved for release snapshots. Each behavior starts with a failing test, then a minimal implementation and a verified result. See `docs/day1-evidence.md` for actual test results and known gaps.
+Read `CONTRIBUTING.md`. All contribution PRs target `dev`; `main` is preserved for release snapshots. Each behavior starts with a failing test, then a minimal implementation and a verified result. See `docs/verification.md` for current evidence and `docs/day1-evidence.md` for the original foundation record.
 
 ## API baseline
 
@@ -59,9 +59,9 @@ The first APK was compiled and its package/signing metadata inspected. Native in
 
 ## Security and remaining work
 
-The scanner receives no DB, Redis or user-token credentials and accepts only four fixture paths. No redirects or response bodies are followed/read. Findings are informational discoveries, not confirmed vulnerabilities.
+The scanner receives no DB, Redis or user-token credentials. Its gateway accepts only named fixed-lab cases. HTTP destinations are pinned, redirects are not followed, and response processing is bounded to16KiB. Only signatures, normalized known fields and booleans are retained, not arbitrary raw response text. A fixed harmless upload is held in expiring fixture memory and uses counted deletion/absence verification. Synthetic ownership and file-canary proofs can be fixture-confirmed; discoveries and parameter/header/DNS observations remain informational. None establishes real-target security.
 
-Remaining design work includes broader directory/API/parameter/custom fixture scenarios, richer filtering and remediation/retest workflow, broader recovery/security regressions, trusted device connection and final demo. All six bounded module categories and basic report/retest UI exist. No green badge establishes complete isolation or production readiness.
+All six bounded module categories, opt-in canary/upload/API inventory, saved immutable case versions, filters, manual review and linked retests are implemented. Remaining acceptance includes physical Android install/storage/share/background/reconnect, trusted phone-to-backend HTTPS, clean-machine handoff, final dependency risk review and production signing if separately authorized. Broader external-target/scaling/exploit features are deliberately excluded. Read [current readiness and device checklist](docs/readiness.md) and [verification status](docs/verification.md). A green build is not full-app or production readiness.
 
 Stopping with `docker compose down -v` intentionally deletes demo history. It is a reset, not a safe recovery operation.
 
