@@ -44,6 +44,22 @@ def create_scanner(transport=None, delay=time.sleep):
                 return result
         finally:
             lock.release()
+    @app.get('/api-check')
+    def api_check(case: Literal['missing','anonymous','alice-own','alice-denied','bob-own','alice-cross']):
+        from .api_checks import http_api_probe
+        if not lock.acquire(blocking=False):
+            raise HTTPException(429, 'probe_busy')
+        try:
+            with httpx.Client(base_url=validate_lab_origin('http://lab:8081'), transport=transport,
+                              timeout=10, follow_redirects=False, trust_env=False) as client:
+                try:
+                    result = http_api_probe(client)(case)
+                except (httpx.HTTPError, ValueError):
+                    raise HTTPException(502, 'fixture_evidence_unavailable')
+                delay(0.5)
+                return result
+        finally:
+            lock.release()
     return app
 
 
