@@ -110,7 +110,7 @@ assert sorted(f['evidence']['passed'] for f in custom_findings)==[False,True,Tru
 assert any(f['evidence']['header_checks'].get('x-fixture-mode',{}).get('matched') is True for f in custom_findings)
 assert all(f['evidence']['case_version']==detail['case_version'] for f in custom_findings)
 # DNS adds exactly three local fixture queries, never HTTP to discovered names.
-scan=request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts','api','parameters','custom','subdomains'],'directory_cases':['canary-v1','upload-v1'],'custom_cases':cases},key='ci-dns-0006')
+scan=request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts','api','parameters','custom','subdomains'],'directory_cases':['canary-v1','upload-v1'],'api_cases':['inventory-v1'],'custom_cases':cases},key='ci-dns-0006')
 for attempt in range(100):
     detail=request('/v1/scans/'+scan['id'])
     if detail['status']=='completed':break
@@ -118,39 +118,44 @@ for attempt in range(100):
     time.sleep(1)
 else:raise RuntimeError('DNS fixture timed out')
 findings=request('/v1/scans/'+scan['id']+'/findings')
-assert detail['attempted']==32 and detail['planned']==34
+assert detail['attempted']==36 and detail['planned']==38
 assert detail['directory_cases']==['canary-v1','upload-v1']
+assert detail['api_cases']==['inventory-v1']
+assert detail['module_progress']['api']['planned']==10
 assert detail['module_progress']['directories']['planned']==13
 assert set(detail['module_progress'])=={'directories','vhosts','api','parameters','custom','subdomains'}
 assert all(p['state']=='completed' and p['attempted']==p['completed'] and p['completed']+p.get('skipped',0)==p['planned'] for p in detail['module_progress'].values())
-assert sum(p['completed'] for p in detail['module_progress'].values())==32
+assert sum(p['completed'] for p in detail['module_progress'].values())==36
 assert detail['cleanup_status']=='verified_absent' and detail['cleanup_attempted']==2
 assert detail['module_progress']['directories']['skipped']==2
 uploads=[f for f in findings if f['evidence'].get('rule_id')=='benign-upload-roundtrip-v1']
 assert len(uploads)==1 and uploads[0]['severity']=='informational' and uploads[0]['evidence']['cleanup_verified'] is True
+inventory=[f for f in findings if f['evidence'].get('rule_id')=='curated-api-discovery-v1']
+assert len(inventory)==3 and sorted(f['evidence']['access'] for f in inventory)==['hidden','protected','public']
+assert all(f['severity']=='informational' and f['evidence']['transport']['scope']=='isolated_fixture_only' for f in inventory)
 names=[f for f in findings if f['module']=='subdomains']
-assert len(findings)==13 and len(names)==1 and names[0]['path']=='app.lab.invalid'
+assert len(findings)==16 and len(names)==1 and names[0]['path']=='app.lab.invalid'
 assert names[0]['evidence']['records']==['192.0.2.10']
 canaries=[f for f in findings if f['evidence'].get('rule_id')=='fixture-path-allowlist-v1']
 assert len(canaries)==1 and canaries[0]['confidence']=='fixture-confirmed' and canaries[0]['severity']=='medium'
 assert set(canaries[0]['evidence']['controls'])=={'public','denied','canary'}
 # Authenticated exports and immutable snapshot reflect the real stored run.
 report=request('/v1/scans/'+scan['id']+'/report.json')
-assert report['totals']['findings']==13 and report['partial'] is False
-assert report['scan']['attempted']==32 and 'not a security certificate' in report['limitations']
+assert report['totals']['findings']==16 and report['partial'] is False
+assert report['scan']['attempted']==36 and 'not a security certificate' in report['limitations']
 html_req=urllib.request.Request(base+'/v1/scans/'+scan['id']+'/report.html',headers={'Authorization':'Bearer '+values['FUZZCORE_TOKEN']})
 with urllib.request.urlopen(html_req,timeout=10) as response:
     assert "default-src 'none'" in response.headers['Content-Security-Policy']
     assert b'FuzzCore lab report' in response.read()
 snapshot_req=urllib.request.Request(base+'/v1/scans/'+scan['id']+'/report-snapshots',data=b'',method='POST',headers={'Authorization':'Bearer '+values['FUZZCORE_TOKEN']})
 with urllib.request.urlopen(snapshot_req,timeout=10) as response:snapshot=json.load(response)
-assert request('/v1/report-snapshots/'+snapshot['id'])['report']['totals']['findings']==13
+assert request('/v1/report-snapshots/'+snapshot['id'])['report']['totals']['findings']==16
 finding=report['findings'][0]
 review_req=urllib.request.Request(base+'/v1/scans/'+scan['id']+'/findings/'+finding['id']+'/review',data=b'{"state":"acknowledged"}',method='PATCH',headers={'Authorization':'Bearer '+values['FUZZCORE_TOKEN'],'Content-Type':'application/json'})
 with urllib.request.urlopen(review_req,timeout=10) as response:assert json.load(response)['review_state']=='acknowledged'
 assert all(f['review_state']=='open' for f in request('/v1/report-snapshots/'+snapshot['id'])['report']['findings'])
 filtered=request('/v1/scans/'+scan['id']+'/report.json?severity=high&module=api')
-assert filtered['totals']['findings']==1 and filtered['unfiltered_findings']==13
+assert filtered['totals']['findings']==1 and filtered['unfiltered_findings']==16
 assert filtered['filters']=={'severity':'high','module':'api'}
 assert request('/v1/scans/'+scan['id']+'/findings?severity=high&module=api')==filtered['findings']
 assert all(f['review_retest_id'] is None for f in filtered['findings'])
