@@ -82,3 +82,7 @@ Shared validated filters apply to findings, JSON/HTML exports and new immutable 
 ### Explicit curated API inventory
 
 Opt-in immutable `inventory-v1` adds4 read-only fixed lab requests after the existing6 API ownership checks: randomized missing control and named public/protected/hidden routes. Header/transport facts are informational, not production weakness claims. No arbitrary schema import or redirects. Defaults never expand. All current options reserve38/use36 maximum requests with2 unused cleanup reserves. See [API inventory evidence](api-inventory-evidence.md).
+
+### DNS response boundaries
+
+The unchanged three-query local DNS plan clears recursion-desired, rejects unexpected/truncated envelopes and suppresses A discoveries for aliased answers without following or storing foreign alias targets. Bounded flag metadata is informational, not a DNS vulnerability claim. Local205backend/19mobile, types/web export pass, including real UDP fixture and counted failure. Fresh Docker/APK gates and native acceptance remain separate. See [DNS response evidence](dns-response-evidence.md).

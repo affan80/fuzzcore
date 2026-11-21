@@ -5,6 +5,8 @@ import dns.message
 import dns.query
 import dns.rdatatype
 import dns.rcode
+import dns.flags
+import dns.rdataclass
 CASES=('baseline','control','seeded')
 
 
@@ -14,13 +16,19 @@ def dns_probe(destination,port=5353,exchange=dns.query.udp):
         name={'baseline':'lab.invalid','seeded':'app.lab.invalid'}.get(case)
         if name is None:name='control-'+secrets.token_hex(6)+'.lab.invalid'
         query=dns.message.make_query(name,'A',use_edns=False)
+        query.flags &= ~dns.flags.RD
         response=exchange(query,destination,port=port,timeout=2,raise_on_truncation=True)
+        if not query.is_response(response) or len(response.question)!=1 or response.question[0].rdclass!=dns.rdataclass.IN or response.flags & dns.flags.TC:
+            raise ValueError('Unexpected or truncated DNS response')
+        alias=any(rrset.rdtype==dns.rdatatype.CNAME for rrset in response.answer)
+        metadata={'authoritative':bool(response.flags & dns.flags.AA),'recursion_available':bool(response.flags & dns.flags.RA),
+            'truncated':False,'alias_observed':alias,'scope':'isolated_fixture_only'}
         records=[]
-        if response.rcode()==dns.rcode.NOERROR:
+        if response.rcode()==dns.rcode.NOERROR and not alias:
             for rrset in response.answer:
-                if rrset.rdtype==dns.rdatatype.A and str(rrset.name).rstrip('.')==name:
+                if rrset.rdtype==dns.rdatatype.A and rrset.rdclass==dns.rdataclass.IN and str(rrset.name).rstrip('.')==name:
                     records.extend(record.address for record in rrset)
-        return {'name':name,'records':sorted(set(records))[:4],'rcode':response.rcode()}
+        return {'name':name,'records':sorted(set(records))[:4],'rcode':response.rcode(),'dns_metadata':metadata}
     return probe
 
 
