@@ -71,6 +71,11 @@ Per-module progress records attempted requests separately from completed respons
 
 Custom schema now supports exactly one named stateless POST scenario and two allowlisted response-header expectations. Existing GET case hashes are preserved. See [custom POST evidence](docs/custom-post-evidence.md).
 
-Production directory discovery compares status/length/SHA256 with a randomized missing-path baseline, filters identical soft-404s and fails unavailable baselines. It still uses four checks. See [directory control evidence](docs/directory-control-evidence.md). Canary/upload cleanup remains separate.
+Production directory discovery compares status/length/SHA256 with a randomized missing-path baseline, filters identical soft-404s and fails unavailable baselines. It still uses four checks. See [directory control evidence](docs/directory-control-evidence.md). The synthetic canary and benign upload/cleanup options below are separately scoped.
 
-An explicitly selected synthetic file-canary case adds three read-only symbolic fixture requests, making the maximum28. It is off by default, immutable on retries/retests and never opens host files. Existing runs do not expand after upgrade. See [synthetic canary evidence](docs/file-canary-evidence.md).
+An explicitly selected synthetic file-canary case adds three read-only symbolic fixture requests, making the canary-only maximum 28. It is off by default, immutable on retries/retests and never opens host files. Existing runs do not expand after upgrade. See [synthetic canary evidence](docs/file-canary-evidence.md).
+
+
+### Benign temporary upload slice
+
+Separate opt-in `upload-v1` adds a fixed in-memory harmless-text create/read/delete/absence check plus two explicit cleanup recovery reserves. Defaults remain 4 directory / 25 full-run attempts. Both canary+upload options reserve 13 directory / 34 maximum full-run attempts; normal maximum execution uses 32 and shows 2 unused reserves. No arbitrary content, filesystem writes, executable bytes or upload-vulnerability claim. Cleanup status/attempts are persisted and exported; unverified cleanup blocks new uploads, not read-only runs. Cancellation still performs reserved cleanup; expiry is a fallback, not proof. See [upload cleanup evidence](docs/upload-cleanup-evidence.md) for test-first results, limits, source references and stop-worker recovery.
