@@ -74,3 +74,8 @@ Production directory dispatch uses a randomized missing-path control first, then
 ## Explicit additional directory cases
 
 Migration11 persists directory_cases as an immutable per-run selection. The default is empty. canary-v1 adds three fixed read-only symbolic fixture cases under the directories module, never host-file access. Its counters plan7 directory requests and a maximum28 full plan; default4/25 plans are preserved. Retry/retest checks require the same selection. Capabilities advertise request cost and off-by-default status. See `file-canary-evidence.md`.
+
+
+### Benign temporary upload slice
+
+Separate opt-in `upload-v1` adds a fixed in-memory harmless-text create/read/delete/absence check plus two explicit cleanup recovery reserves. Defaults remain 4 directory / 25 full-run attempts. Both canary+upload options reserve 13 directory / 34 maximum full-run attempts; normal maximum execution uses 32 and shows 2 unused reserves. No arbitrary content, filesystem writes, executable bytes or upload-vulnerability claim. Cleanup status/attempts are persisted and exported; unverified cleanup blocks new uploads, not read-only runs. Cancellation still performs reserved cleanup; expiry is a fallback, not proof. See [upload cleanup evidence](upload-cleanup-evidence.md) for test-first results, limits, source references and stop-worker recovery.
