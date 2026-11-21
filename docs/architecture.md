@@ -62,3 +62,7 @@ The Nov 23 target is tight after the design pause. A working APK build is not pr
 ## Durable module progress
 
 Migration10 adds per-module state/planned/attempted/completed checkpoints to each new scan. Request starts and returned responses are committed separately. Terminal runs preserve completed modules and mark never-started modules not_run. Legacy detailed progress is unavailable rather than inferred from aggregate counts. Scan detail, history and reports expose the same state. This does not change the request budget or fixture-only authority. See `module-progress-evidence.md`.
+
+## Custom schema v2
+
+GET remains default. POST is limited to one stateless disposable fixture with a bounded harmless marker, no query parameters or supplied request headers. Header expectations allow only content-type and x-fixture-mode, exact text matching. Old absent-field canonicalization preserves existing case versions. Capability metadata advertises these exact limits. See `custom-post-evidence.md`.

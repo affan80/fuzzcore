@@ -9,7 +9,7 @@ Custom cases are JSON data, never executable code or templates. A custom scan re
 ```
 
 - `path`: exactly `/health`, `/api/status` or `/custom-fixture`.
-- `method`: GET only. Disposable POST scenarios remain unimplemented.
+- Initial slice `method`: GET only. The later named stateless POST/header extension is documented in `custom-post-evidence.md`, with old GET hashes preserved.
 - `params`: empty or one `q` marker of at most 64 letters, digits, spaces, underscores or hyphens.
 - `expect_status`: 200 or 404.
 - `contains`: optional literal text of at most 64 characters. No regular expressions, shell, evaluation, interpolation or file reads.

@@ -84,7 +84,7 @@ assert len(findings)==7 and len(parameter_findings)==2
 assert all(f['severity']=='informational' and f['confidence']=='signal' for f in parameter_findings)
 # Maximum custom-case plan shares the same counter and immutable version.
 cases=[{'path':'/health','method':'GET','params':{},'expect_status':200,'contains':'fixture'},
-       {'path':'/custom-fixture','method':'GET','params':{'q':'harmless'},'expect_status':200,'contains':'ready'},
+       {'path':'/custom-disposable','method':'POST','params':{},'body':{'marker':'harmless'},'expect_status':200,'contains':'fixture','expect_headers':{'content-type':'application/json','x-fixture-mode':'disposable'}},
        {'path':'/api/status','method':'GET','params':{},'expect_status':404,'contains':''}]
 scan=request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts','api','parameters','custom'],'custom_cases':cases},key='ci-custom-0005')
 for attempt in range(90):
@@ -98,6 +98,7 @@ assert detail['attempted']==detail['planned']==22 and len(detail['case_version']
 custom_findings=[f for f in findings if f['module']=='custom']
 assert len(findings)==10 and len(custom_findings)==3
 assert sorted(f['evidence']['passed'] for f in custom_findings)==[False,True,True]
+assert any(f['evidence']['header_checks'].get('x-fixture-mode',{}).get('matched') is True for f in custom_findings)
 assert all(f['evidence']['case_version']==detail['case_version'] for f in custom_findings)
 # DNS adds exactly three local fixture queries, never HTTP to discovered names.
 scan=request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts','api','parameters','custom','subdomains'],'custom_cases':cases},key='ci-dns-0006')
