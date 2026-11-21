@@ -2,10 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppState, FlatList, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
-import { buildLabRequest } from './labPolicy';
+import { buildLabRequest, type LabModule } from './labPolicy';
 
-type Scan = {id:string; status:string; attempted:number; planned:number; error:string|null};
-type Finding = {id:string; path:string; status_code:number; summary:string};
+type Scan = {id:string; status:string; attempted:number; planned:number; error:string|null; modules:LabModule[]};
+type Finding = {id:string; path:string; status_code:number; summary:string; module:LabModule; evidence?:{rule_id?:string}};
 const terminal = new Set(['completed','cancelled','failed','timed_out','interrupted']);
 
 export default function App() {
@@ -13,6 +13,7 @@ export default function App() {
   const [token, setToken] = useState('');
   const [connected, setConnected] = useState(false);
   const [authorized, setAuthorized] = useState(false);
+  const [modules, setModules] = useState<LabModule[]>(['directories']);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [scans, setScans] = useState<Scan[]>([]);
@@ -88,7 +89,7 @@ export default function App() {
 
   async function start() {
     await action(async () => {
-      const body = buildLabRequest(authorized);
+      const body = buildLabRequest(authorized, modules);
       if(!pendingKey.current)pendingKey.current = `mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const row:Scan = await request('/v1/scans',{method:'POST',headers:{'Idempotency-Key':pendingKey.current},body:JSON.stringify(body)});
       pendingKey.current = null; setAuthorized(false);
@@ -100,7 +101,7 @@ export default function App() {
     <View style={s.brand}><View style={s.mark}/><Text style={s.brandName}>FUZZCORE</Text><Text style={s.tag}>LAB EDITION</Text></View>
     <Text style={s.title}>A clear view of{ '\n' }your test surface.</Text>
     <Text style={s.intro}>Controlled discovery. Real evidence. No vulnerability claims without review.</Text>
-    <View style={s.notice}><Text style={s.noticeTitle}>Authorized lab targets only</Text><Text style={s.body}>This Day 1 build supports a fixed local fixture and directory discovery. Other scan modules and report export are not available yet.</Text></View>
+    <View style={s.notice}><Text style={s.noticeTitle}>Authorized lab targets only</Text><Text style={s.body}>This build supports fixed-lab directory and virtual-host discovery. API, parameter, custom and DNS modules and report export are not available yet.</Text></View>
     {!connected ? <View style={s.card}>
       <Text style={s.heading}>Connect your backend</Text><Text style={s.body}>Your APK controls a separate server. The server must be running and reachable from this device.</Text>
       <Text style={s.label}>API ADDRESS</Text><TextInput style={s.input} value={base} onChangeText={setBase} placeholder="https://your-development-api" placeholderTextColor="#81909f" autoCapitalize="none" autoCorrect={false} keyboardType="url" accessibilityLabel="API address"/>
@@ -110,20 +111,22 @@ export default function App() {
     </View> : <>
       <View style={s.tabs}>{(['run','history'] as const).map(t=><Pressable key={t} onPress={()=>setTab(t)} style={[s.tab,tab===t&&s.tabOn]} accessibilityRole="tab" accessibilityState={{selected:tab===t}}><Text style={s.tabText}>{t==='run'?'Run a scan':'History'}</Text></Pressable>)}</View>
       {tab==='run' ? <View style={s.card}>
-        <Text style={s.label}>APPROVED TARGET</Text><Text style={s.heading}>FuzzCore fixture lab</Text><Text style={s.body}>Directory discovery · 4 fixed paths · 2 requests/sec maximum · no redirects</Text>
+        <Text style={s.label}>APPROVED TARGET</Text><Text style={s.heading}>FuzzCore fixture lab</Text><Text style={s.body}>One fixture destination · 2 requests/sec maximum · no redirects</Text>
+        {(['directories','vhosts'] as const).map(module => <View key={module} style={s.notice}><Text style={s.body}>{module==='directories'?'Directory discovery · 4 fixed paths':'Virtual hosts · default, random control, seeded host'}</Text><Switch value={modules.includes(module)} disabled={busy || (!!selected && !terminal.has(selected.status))} accessibilityLabel={`Select ${module} module`} onValueChange={enabled=>{setModules(current=>enabled?[...current,module]:current.filter(m=>m!==module));setAuthorized(false);}}/></View>)}
+        <Text style={s.foot}>{(modules.includes('directories')?4:0)+(modules.includes('vhosts')?3:0)} total requests across selected modules. Virtual-host differences are discoveries, not proof of isolation failure.</Text>
         <View style={s.notice}><Text style={s.body}>I am authorized to test this fixed fixture lab. This confirmation does not permit other targets.</Text><Switch value={authorized} onValueChange={setAuthorized} disabled={busy} accessibilityLabel="Confirm authorization for this lab scan" /></View>
-        <Pressable disabled={!authorized || busy || (!!selected && !terminal.has(selected.status))} style={[s.button,(!authorized || busy || (!!selected && !terminal.has(selected.status)))&&s.disabled]} onPress={start} accessibilityRole="button"><Text style={s.buttonText}>{busy?'Working…':'Start lab scan'}</Text></Pressable>
+        <Pressable disabled={!authorized || !modules.length || busy || (!!selected && !terminal.has(selected.status))} style={[s.button,(!authorized || !modules.length || busy || (!!selected && !terminal.has(selected.status)))&&s.disabled]} onPress={start} accessibilityRole="button"><Text style={s.buttonText}>{busy?'Working…':'Start lab scan'}</Text></Pressable>
         {selected && <><View style={s.divider}/><Text style={s.label}>LATEST RUN</Text><Text style={s.status}>{selected.status.replace('_',' ')}</Text><Text style={s.body}>{selected.attempted} / {selected.planned} checks attempted</Text>
           {!!selected.error && <Text style={s.error}>{selected.error.replaceAll('_',' ')}</Text>}
           {!terminal.has(selected.status) && <Pressable disabled={busy} style={s.secondary} onPress={()=>action(async()=>{await request(`/v1/scans/${selected.id}/cancel`,{method:'POST'});await refresh(selected.id);})} accessibilityRole="button"><Text style={s.link}>Cancel scan</Text></Pressable>}
-          <Text style={s.heading}>Discovered resources</Text>{findings.length===0?<Text style={s.body}>No resources recorded for this run yet.</Text>:findings.map(f=><View key={f.id} style={s.finding}><Text style={s.path}>{f.path} <Text style={s.code}>{f.status_code}</Text></Text><Text style={s.body}>{f.summary}</Text></View>)}
+          <Text style={s.heading}>Discoveries</Text>{findings.length===0?<Text style={s.body}>No resources recorded for this run yet.</Text>:findings.map(f=><View key={f.id} style={s.finding}><Text style={s.path}>{f.path} <Text style={s.code}>{f.status_code}</Text></Text><Text style={s.foot}>{f.module} · informational · {f.evidence?.rule_id || 'resource-status-v1'}</Text><Text style={s.body}>{f.summary}</Text></View>)}
         </>}
       </View> : <View style={s.card}><Text style={s.heading}>Recent runs</Text>{scans.length===0?<Text style={s.body}>No scans yet. Start a lab scan to see it here.</Text>:scans.map(row=><Pressable key={row.id} style={s.finding} onPress={()=>action(async()=>{await refresh(row.id);setTab('run');})} accessibilityRole="button"><Text style={s.path}>{row.status} · {row.attempted}/{row.planned}</Text><Text style={s.foot}>{row.id.slice(0,8)}</Text></Pressable>)}</View>}
       <Pressable disabled={busy} onPress={()=>action(async()=>refresh(selected?.id))} style={s.secondary} accessibilityRole="button"><Text style={s.link}>Refresh status</Text></Pressable>
       <Pressable onPress={()=>action(async()=>{setConnected(false);setAuthorized(false);setToken('');setSelected(null);setFindings([]);setScans([]);if(Platform.OS!=='web')await SecureStore.deleteItemAsync('apiToken');})} style={s.secondary} accessibilityRole="button"><Text style={s.muted}>Disconnect and remove token</Text></Pressable>
     </>}
     {!!error && <View style={s.errorBox} accessibilityRole="alert"><Text style={s.error}>{error}</Text></View>}
-    <Text style={s.footer}>DAY 1 / PRIVATE DEVELOPMENT BASELINE{ '\n' }Finding a resource does not prove it is vulnerable.</Text>
+    <Text style={s.footer}>LAB / DEVELOPMENT BUILD{ '\n' }Finding a resource does not prove it is vulnerable.</Text>
   </ScrollView></SafeAreaView>;
 }
 
