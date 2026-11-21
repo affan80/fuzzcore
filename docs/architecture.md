@@ -66,3 +66,7 @@ Migration10 adds per-module state/planned/attempted/completed checkpoints to eac
 ## Custom schema v2
 
 GET remains default. POST is limited to one stateless disposable fixture with a bounded harmless marker, no query parameters or supplied request headers. Header expectations allow only content-type and x-fixture-mode, exact text matching. Old absent-field canonicalization preserves existing case versions. Capability metadata advertises these exact limits. See `custom-post-evidence.md`.
+
+## Directory signatures
+
+Production directory dispatch uses a randomized missing-path control first, then three fixed resources, with one request each. Status/length/SHA256 comparisons filter exact soft-404 signatures. Unavailable/redirecting controls fail partial rather than imply a clean assessment. The scanner caps body processing at16KiB and retains no raw body. The old status-only helper is not a production fallback. See `directory-control-evidence.md`.

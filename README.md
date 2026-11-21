@@ -4,7 +4,7 @@ React Native / Expo Android controller with a separate FastAPI and RQ lab-discov
 
 ## Current scope
 
-One pre-provisioned user, one fixed authorized lab, four bounded resource checks and three virtual-host control/candidate requests. Six read-only synthetic API ownership checks add a known two-actor fixture proof. Six harmless parameter-marker checks add informational reflection/duplicate-value signals, never proof of injection. Modules can run separately or together with at most twenty-five checks including up to three versioned declarative custom GET/named disposable POST checks and three local DNS queries. DNS discoveries never trigger HTTP follow-up. This is not a general API security assessment. No arbitrary targets, exploits, remote code execution, external wordlists or auto-fixes. All six categories have bounded fixture implementations. Broader scenarios in the full design remain unfinished; the app describes its fixture limits.
+One pre-provisioned user, one fixed authorized lab, three bounded resources plus a fresh missing-path control and three virtual-host control/candidate requests. Six read-only synthetic API ownership checks add a known two-actor fixture proof. Six harmless parameter-marker checks add informational reflection/duplicate-value signals, never proof of injection. Modules can run separately or together with at most twenty-five checks including up to three versioned declarative custom GET/named disposable POST checks and three local DNS queries. DNS discoveries never trigger HTTP follow-up. This is not a general API security assessment. No arbitrary targets, exploits, remote code execution, external wordlists or auto-fixes. All six categories have bounded fixture implementations. Broader scenarios in the full design remain unfinished; the app describes its fixture limits.
 
 ## Run locally
 
@@ -70,3 +70,5 @@ Authenticated JSON/printable HTML reports, immutable report snapshots, review st
 Per-module progress records attempted requests separately from completed responses. Failed, cancelled and interrupted runs never mark later modules complete. Historic detailed progress is unavailable rather than fabricated. See [progress evidence](docs/module-progress-evidence.md).
 
 Custom schema now supports exactly one named stateless POST scenario and two allowlisted response-header expectations. Existing GET case hashes are preserved. See [custom POST evidence](docs/custom-post-evidence.md).
+
+Production directory discovery compares status/length/SHA256 with a randomized missing-path baseline, filters identical soft-404s and fails unavailable baselines. It still uses four checks. See [directory control evidence](docs/directory-control-evidence.md). Canary/upload cleanup remains separate.

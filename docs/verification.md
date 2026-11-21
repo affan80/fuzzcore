@@ -36,13 +36,17 @@ See `dns-fixture-evidence.md`. Five backend regressions and one mobile-policy re
 
 See `report-retest-evidence.md`. Seven failing backend regressions preceded implementation. Full local suite:87backend tests,7mobile tests, types/web export. Real loopback UI proved JSON+HTML downloads, matching totals/review state, immutable snapshot and same-scope linked retest/comparison. Report/mobile pixels inspected. Exact-head run https://github.com/affan80/fuzzcore/actions/runs/44880894769 passed all four checks including Docker exports/snapshots/retest and APK before PR18 merged; native file share is unverified. npm audit:3moderate Expo fingerprint/minimatch advisories, no high/critical; no blind major downgrade applied.
 
-## Durable module progress, local verification pending CI
+## Durable module progress, green before merge
 
-See `module-progress-evidence.md`. Nine backend regressions failed first, including final-response429; three new mobile formatting checks began red. Full local suite:96backend,10mobile, types/web export. Real loopback UI showed running/completed per-module counters, matching report export and cancellation with later modules not_run. Historic fine-grained results are explicitly unavailable, never inferred. Docker smoke checks the stored25-check plan; exact-head CI and native acceptance remain separate.
+See `module-progress-evidence.md`. Nine backend regressions failed first, including final-response429; three new mobile formatting checks began red. Full local suite:96backend,10mobile, types/web export. Real loopback UI showed running/completed per-module counters, matching report export and cancellation with later modules not_run. Historic fine-grained results are explicitly unavailable, never inferred. Exact-head run https://github.com/affan80/fuzzcore/actions/runs/44881554293 passed all four jobs including Docker stored25-check progress and APK before PR19 merged; native acceptance remains separate.
 
 ## Named disposable custom POST/header checks, local verification pending CI
 
 See `custom-post-evidence.md`. Seven new backend checks failed before implementation, eighteen new cases pass. Full suite114backend/11mobile, types/web export. Old GET canonical JSON/hashes stay identical. Real loopback UI completed the named stateless POST plus header expectations under the unchanged23-check selected plan, exported matching evidence and reset consent on example change. Exact-head Docker/APK CI and native acceptance remain separate.
+
+## Directory controls, local verification pending CI
+
+See `directory-control-evidence.md`. Ten new backend regressions failed before their fixes. Full local suite124backend/11mobile, types/web export. Positive and soft404 real local fixtures, unavailable/redirecting controls, production dispatch and actual web report evidence pass. The four-check directory budget and maximum25-check aggregate plan are unchanged. Fresh Docker/APK CI and native acceptance remain separate. Traversal/upload cleanup is not implemented by this slice.
 
 ## Still unverified or unfinished
 

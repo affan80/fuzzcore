@@ -9,6 +9,7 @@ class Handler(BaseHTTPRequestHandler):
     allow_seeded_cross_owner = True
 
     parameter_signals = True
+    directory_soft404 = False
 
     def do_POST(self):
         # Named stateless disposable scenario: no files, DB changes or retained data.
@@ -68,6 +69,8 @@ class Handler(BaseHTTPRequestHandler):
         body = b'{"fixture":true}' if found else b'not found'
         if self.headers.get('Host') == 'admin.lab.invalid' and self.path == '/':
             body = b'{"fixture":true,"vhost":"admin"}'
+        if self.directory_soft404 and (self.path in ('/','/health','/api/status') or self.path.startswith('/missing-control-')):
+            found=True;body=b'synthetic soft404 baseline'
         self.send_response(200 if found else 404)
         self.send_header('Content-Type', 'application/json' if found else 'text/plain')
         self.send_header('Content-Length', str(len(body)))

@@ -98,7 +98,7 @@ def validate_lab_origin(origin):
     return 'http://lab:8081'
 
 
-def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None, dns_probe=None):
+def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, vhost_probe=None, api_probe=None, parameter_probe=None, custom_probe=None, dns_probe=None, directory_probe=None):
     """Cooperative, single-worker fixture discovery. probe accepts fixed paths only."""
     with sessions() as db:
         claimed = db.execute(update(Scan).where(
@@ -119,10 +119,12 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
         if not json.loads(row.module_progress) and row.attempted==0:
             row.module_progress=json.dumps(initial_progress(modules,custom_cases));db.commit()
     from .vhosts import CASES, discover
-    plan = ([('directories', path) for path in PATHS] if 'directories' in modules else [])
+    directory_paths=(PATHS[-1],*PATHS[:-1]) if directory_probe is not None else PATHS
+    plan = ([('directories', path) for path in directory_paths] if 'directories' in modules else [])
     plan += ([('vhosts', case) for case in CASES] if 'vhosts' in modules else [])
     from .api_checks import CASES as API_CASES, assess
     plan += ([('api', case) for case in API_CASES] if 'api' in modules else [])
+    directory_results = {}
     vhost_results = {}
     from .parameters import CASES as PARAM_CASES, assess as assess_parameters
     plan += ([('parameters', case) for case in PARAM_CASES] if 'parameters' in modules else [])
@@ -147,8 +149,10 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                 if clock() - started > 300:
                     row.status = 'timed_out'; row.updated_at = utcnow(); settle_progress(row); db.commit(); return
                 row.attempted += 1; advance_progress(row,module); row.updated_at = utcnow(); db.commit()
-            result = vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else custom_probe(path) if module == 'custom' else dns_probe(path) if module == 'subdomains' else None
+            result = directory_probe(path) if module=='directories' and directory_probe is not None else vhost_probe(path) if module == 'vhosts' else api_probe(path) if module == 'api' else parameter_probe(path) if module == 'parameters' else custom_probe(path) if module == 'custom' else dns_probe(path) if module == 'subdomains' else None
             status = (200 if result['rcode'] in (0,3) else 502) if module=='subdomains' else result['status_code'] if result is not None else probe(path)
+            if module=='directories' and directory_probe is not None:
+                directory_results[path]=result
             if module == 'vhosts':
                 vhost_results[path] = result
             elif module == 'api':
@@ -161,9 +165,15 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                 row = db.get(Scan, scan_id)
                 row.updated_at = utcnow()
                 advance_progress(row,module,completed=True)
-                if module == 'directories' and 200 <= status < 300:
+                if status == 429:
+                    row.status = 'failed'; row.error = 'target_rate_limited'; fail_module(row,module); settle_progress(row); db.commit(); return
+                if module == 'directories' and directory_probe is None and 200 <= status < 300:
                     db.add(Finding(id=str(uuid.uuid4()), scan_id=scan_id, path=path,
                                    status_code=status, summary='Lab resource discovered; not a vulnerability.'))
+                if module=='directories' and directory_probe is not None:
+                    from .directories import discover as discover_directories
+                    for found in discover_directories({key:value for key,value in directory_results.items() if key in (PATHS[-1],path)}):
+                        db.add(Finding(id=str(uuid.uuid4()),scan_id=scan_id,path=found['path'],status_code=found['status_code'],module='directories',evidence=json.dumps(found['evidence']),summary='Lab resource differs from random missing-path control; discovery only.'))
                 if module == 'vhosts' and path == 'seeded':
                     found = discover(vhost_results)
                     if found:
@@ -195,8 +205,6 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
                             status_code=200,module='subdomains',severity='informational',confidence='observed',
                             summary='Local fixture DNS record discovered; no HTTP follow-up or vulnerability claim.',
                             evidence=json.dumps(found['evidence'])))
-                if status == 429:
-                    row.status = 'failed'; row.error = 'target_rate_limited'; fail_module(row,module); settle_progress(row); db.commit(); return
                 db.commit()
             pause(0.5)  # Concurrency one and at most two fixture requests per second.
         with sessions() as db:
@@ -208,6 +216,7 @@ def run_scan(scan_id, sessions, probe, pause=time.sleep, clock=time.monotonic, v
             row = db.get(Scan, scan_id)
             row.status = 'cancelled' if row.status == 'cancelling' else 'failed'
             row.error = None if row.status == 'cancelled' else 'probe_failed'
+            if row.status=='failed' and 'module' in locals():fail_module(row,module)
             row.updated_at = utcnow(); settle_progress(row); db.commit()
 
 
@@ -231,6 +240,10 @@ def execute_job(scan_id):
             response = client.get('/probe', params={'path': path})
             response.raise_for_status()
             return response.json()['status_code']
+        def directory_probe(path):
+            if path not in PATHS:raise ValueError('Out-of-scope directory path')
+            response=client.get('/directory-check',params={'path':path})
+            response.raise_for_status();return response.json()
         def vhost_probe(case):
             from .vhosts import CASES
             if case not in CASES:
@@ -263,4 +276,4 @@ def execute_job(scan_id):
             response=client.get('/dns-check',params={'case':case})
             response.raise_for_status()
             return response.json()
-        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe, dns_probe=dns_probe)
+        run_scan(scan_id, sessions, probe, vhost_probe=vhost_probe, api_probe=api_probe, parameter_probe=parameter_probe, custom_probe=custom_probe, dns_probe=dns_probe, directory_probe=directory_probe)
