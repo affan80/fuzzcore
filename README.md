@@ -4,7 +4,7 @@ React Native / Expo Android controller with a separate FastAPI and RQ lab-discov
 
 ## Current scope
 
-One pre-provisioned user, one fixed authorized lab, four bounded resource checks and three virtual-host control/candidate requests. Modules can run separately or together with at most seven requests. No arbitrary targets, exploits, remote code execution, external wordlists or auto-fixes. Other modules in the full design are not implemented yet. The app says so.
+One pre-provisioned user, one fixed authorized lab, four bounded resource checks and three virtual-host control/candidate requests. Six read-only synthetic API ownership checks add a known two-actor fixture proof. Modules can run separately or together with at most thirteen requests. This is not a general API security assessment. No arbitrary targets, exploits, remote code execution, external wordlists or auto-fixes. Other modules in the full design are not implemented yet. The app says so.
 
 ## Run locally
 

@@ -54,6 +54,21 @@ vhosts = [f for f in findings if f['module']=='vhosts']
 assert len(findings)==4 and len(vhosts)==1 and vhosts[0]['path']=='admin.lab.invalid'
 assert vhosts[0]['evidence']['rule_id']=='vhost-difference-v1'
 assert set(vhosts[0]['evidence']['baseline'])=={'default','control','seeded'}
+# Third run includes the six bounded synthetic two-actor API checks.
+scan = request('/v1/scans', {'target_id':'local-lab','authorization_confirmed':True,'modules':['directories','vhosts','api']}, key='ci-api-proof-0003')
+for attempt in range(60):
+    detail = request('/v1/scans/' + scan['id'])
+    if detail['status']=='completed': break
+    if detail['status'] in ('failed','timed_out'): raise RuntimeError('API fixture run failed')
+    time.sleep(1)
+else:
+    raise RuntimeError('API fixture run did not finish')
+findings = request('/v1/scans/' + scan['id'] + '/findings')
+assert detail['attempted']==detail['planned']==13
+api_findings = [f for f in findings if f['module']=='api']
+assert len(findings)==5 and len(api_findings)==1
+assert api_findings[0]['severity']=='high' and api_findings[0]['confidence']=='fixture-confirmed'
+assert api_findings[0]['evidence']['rule_id']=='fixture-object-ownership-v1'
 # Network membership check: scanner has neither data network nor injected data credentials.
 container = subprocess.check_output(['docker','compose','ps','-q','scanner'],text=True).strip()
 config = json.loads(subprocess.check_output(['docker','inspect',container]))[0]
@@ -72,4 +87,4 @@ for host, port in [('db',5432), ('redis',6379)]:
 print('Scanner cannot reach data services')
 '''
 subprocess.run(['docker','compose','exec','-T','scanner','python','-c',probe], check=True)
-print('Real fixture run passed: directory-only 4/3 and combined 7/4 fixture checks/discoveries; scanner network membership checked.')
+print('Real fixture run passed: directory-only 4/3 , combined7/4 and three-module13/5 fixture checks/findings; scanner network membership checked.')

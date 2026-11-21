@@ -35,7 +35,7 @@ def create_app(sessions, enqueue, token):
         target_id: Literal['local-lab']
         profile_id: Literal['lab-small'] = 'lab-small'
         authorization_confirmed: Literal[True]
-        modules: list[Literal['directories','vhosts']] = ['directories']
+        modules: list[Literal['directories','vhosts','api']] = ['directories']
 
         @field_validator('authorization_confirmed', mode='before')
         @classmethod
@@ -51,10 +51,10 @@ def create_app(sessions, enqueue, token):
     @app.get('/v1/capabilities')
     def capabilities(owner=Depends(auth)):
         return {
-            'modules': {name: {'supported': name in ('directories','vhosts'),
-                              'reason': None if name in ('directories','vhosts') else 'not_implemented'}
+            'modules': {name: {'supported': name in ('directories','vhosts','api'),
+                              'reason': None if name in ('directories','vhosts','api') else 'not_implemented'}
                         for name in ('directories', 'vhosts', 'api', 'parameters', 'custom', 'subdomains')},
-            'profile': {'id': 'lab-small', 'max_attempts': 7,
+            'profile': {'id': 'lab-small', 'max_attempts': 13,
                         'requests_per_second': 2, 'concurrency': 1},
             'target_mode': 'fixed_lab_only', 'authorization_required': True,
         }
@@ -70,7 +70,7 @@ def create_app(sessions, enqueue, token):
         with sessions() as db:
             row = db.scalar(select(Scan).where(Scan.owner == owner, Scan.request_key == idempotency_key))
             if not row:
-                row = Scan(id=str(uuid.uuid4()), owner=owner, request_key=idempotency_key, authorization_confirmed_at=utcnow(), selected_modules=','.join(sorted(body.modules)), planned=(4 if 'directories' in body.modules else 0)+(3 if 'vhosts' in body.modules else 0))
+                row = Scan(id=str(uuid.uuid4()), owner=owner, request_key=idempotency_key, authorization_confirmed_at=utcnow(), selected_modules=','.join(sorted(body.modules)), planned=(4 if 'directories' in body.modules else 0)+(3 if 'vhosts' in body.modules else 0)+(6 if 'api' in body.modules else 0))
                 db.add(row)
                 db.add(EnqueueIntent(scan_id=row.id))
                 try:
@@ -114,7 +114,7 @@ def create_app(sessions, enqueue, token):
     def findings(scan_id: str, owner=Depends(auth)):
         with sessions() as db:
             owned(db, scan_id, owner)
-            return [{'id': r.id, 'path': r.path, 'status_code': r.status_code, 'summary': r.summary, 'severity': 'informational', 'confidence': 'observed', 'module':r.module, 'evidence':json.loads(r.evidence)}
+            return [{'id': r.id, 'path': r.path, 'status_code': r.status_code, 'summary': r.summary, 'severity':r.severity, 'confidence':r.confidence, 'module':r.module, 'evidence':json.loads(r.evidence)}
                     for r in db.scalars(select(Finding).where(Finding.scan_id == scan_id).limit(100))]
 
     return app
