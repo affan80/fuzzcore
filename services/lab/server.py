@@ -1,6 +1,7 @@
 """Deterministic fixture server. Not a deployable third-party target."""
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
+import re
 from urllib.parse import urlsplit, parse_qs
 
 class Handler(BaseHTTPRequestHandler):
@@ -8,6 +9,24 @@ class Handler(BaseHTTPRequestHandler):
     allow_seeded_cross_owner = True
 
     parameter_signals = True
+
+    def do_POST(self):
+        # Named stateless disposable scenario: no files, DB changes or retained data.
+        if self.path!='/custom-disposable':
+            self.send_error(404);return
+        try:
+            length=int(self.headers.get('Content-Length','0'))
+            if not 1<=length<=256 or self.headers.get('Content-Type')!='application/json' or self.headers.get('Transfer-Encoding'):
+                raise ValueError('Invalid fixture input')
+            value=json.loads(self.rfile.read(length))
+            if not isinstance(value,dict) or set(value)!={'marker'} or not isinstance(value['marker'],str) or not re.fullmatch(r'[A-Za-z0-9 _-]{1,64}',value['marker']):
+                raise ValueError('Invalid fixture marker')
+        except (ValueError,UnicodeError):
+            self.send_error(400);return
+        body=json.dumps({'fixture':True,'disposable':True,'marker_accepted':True}).encode()
+        self.send_response(200);self.send_header('Content-Type','application/json')
+        self.send_header('X-Fixture-Mode','disposable')
+        self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
 
     def do_GET(self):
         parsed=urlsplit(self.path)
