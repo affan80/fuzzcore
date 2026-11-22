@@ -1,0 +1,14 @@
+{
+  "name": "fuzzcore-live-lab",
+  "image": "mcr.microsoft.com/devcontainers/python:3.10",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "hostRequirements": { "cpus": 2 },
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "FuzzCore API (fixture lab only)", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "[ -f .env ] || python3 infra/ci_env.py",
+  "postStartCommand": "docker compose up -d --build"
+}
