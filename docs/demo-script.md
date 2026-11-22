@@ -1,6 +1,6 @@
 # Monday demo script (fallback-first)
 
-Status 22 Nov 2026. This script is driven by verified CI evidence. It claims no physical-device success. The live-phone segment is optional and only runs if a supported setup is confirmed before Monday.
+Status 22 Nov 2026. This script is driven by verified CI evidence. It claims no physical-device success. Nothing is hosted: no server, tunnel or cloud service is used or expected. The optional phone segment is limited to what works without a backend.
 
 ## Ground rules for the presenter
 
@@ -41,18 +41,18 @@ Show on GitHub, not on a phone:
 - Review flow: a finding is marked fixed only after an explicit note and a completed linked retest where its fingerprint is gone. Comparison alone never marks fixed.
 - Use the report exports described in docs/report-retest-evidence.md and docs/report-filter-review-evidence.md. If screenshots are shown, use ones captured from the web preview and say so.
 
-## Segment 5 (optional): live phone
+## Segment 5 (optional): the APK on a phone, no backend
 
-Run only if all of these are confirmed before Monday: an Android phone with the final APK installed, a backend the phone can reach over trusted HTTPS, and a test run the day before. Otherwise skip this segment and say device acceptance is the next step.
-- Install the APK (debug-signed, internal test). Enter the backend address and token privately, never on screen.
-- Run a directory plus DNS scan, show progress, open the findings, export the report.
-- Do not show tokens, and do not publish backend ports.
+Nothing is hosted, so there is no live scan from the phone. Do not imply one. Only if the presenter has already installed the APK and checked it on their own phone, show the installed app on screen and say it needs a backend to scan. A live scan needs a backend on a machine the presenter owns, which is not part of this plan. Otherwise skip this segment and say device acceptance is the next step.
+- The APK is debug-signed and internal-test only.
+- Do not start or promise a scan. Show results from the CI evidence and the report examples instead.
+- No tokens, backend addresses or ports appear on screen.
 
 ## Segment 6: honest limits and next steps (1 min)
 
-- Open gates: physical Android acceptance, trusted HTTPS backend, clean-machine rehearsal, production signing.
+- Open gates: physical Android acceptance, a backend the phone can reach (none is planned or hosted), clean-machine rehearsal, production signing.
 - Out of scope by design: arbitrary targets, exploit automation, public DNS follow-up, automatic fixes.
-- Next: device acceptance on a real phone, then a controlled hosted backend if approved.
+- Next: device acceptance on a real phone with a backend on a machine the owner provides.
 
 ## Questions to expect
 
