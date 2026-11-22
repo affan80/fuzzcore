@@ -1,0 +1,14 @@
+{
+  "name": "fuzzcore-live-lab",
+  "image": "mcr.microsoft.com/devcontainers/python:3.10",
+  "remoteUser": "root",
+  "runArgs": ["--privileged"],
+  "mounts": ["source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"],
+  "hostRequirements": { "cpus": 2 },
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "FuzzCore API (fixture lab only)", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "sh .devcontainer/setup.sh",
+  "postStartCommand": "sh .devcontainer/start.sh"
+}
